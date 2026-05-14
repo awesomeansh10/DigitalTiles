@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Graph Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f8fafc;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        #canvas-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+            background-size: 30px 30px;
+        }
+
+        .node-wrapper {
+            position: absolute;
+            cursor: grab;
+            text-align: center;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .node-wrapper:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+        }
+
+        .node-img {
+            border: 4px solid #ffffff;
+            background: white;
+            border-radius: 16px;
+            pointer-events: none;
+            width: 150px;
+            height: 150px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .node-label {
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: bold;
+            background: #1e293b;
+            color: #f8fafc;
+            padding: 6px 14px;
+            border-radius: 20px;
+            margin-top: -15px;
+            position: relative;
+            display: inline-block;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+            border: 2px solid #ffffff;
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        path.connection-line {
+            fill: none;
+            stroke: #94a3b8;
+            stroke-width: 5;
+            stroke-linecap: round;
+        }
+
+        .viewer-controls {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            border: 1px solid #e2e8f0;
+        }
+
+        .btn {
+            padding: 10px 16px;
+            background: #0f172a;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.2s, transform 0.1s;
+            font-family: inherit;
+        }
+
+        .btn:hover {
+            background: #334155;
+        }
+
+        .btn:active {
+            transform: scale(0.95);
+        }
+
+        .btn-secondary {
+            background: #3b82f6;
+        }
+
+        .btn-secondary:hover {
+            background: #2563eb;
+        }
+
+        .btn-figma {
+            background: #f24e1e;
+        }
+
+        .btn-figma:hover {
+            background: #c53a12;
+        }
+
+        /* --- NEW: Fullscreen Overlay Styling --- */
+        #fullscreen-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(15, 23, 42, 0.85);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(8px);
+            cursor: zoom-out;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+
+        #fullscreen-img {
+            background-color: white;
+            /* <-- Add this line */
+            max-width: 85%;
+            max-height: 85%;
+            border: 8px solid white;
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            object-fit: contain;
+            transform: scale(0.9);
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Classes added via JS to animate the popup */
+        #fullscreen-overlay.active {
+            opacity: 1;
+        }
+
+        #fullscreen-overlay.active #fullscreen-img {
+            transform: scale(1);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="canvas-container">
+        <svg id="edges"></svg>
+    </div>
+
+    <!-- NEW: The Fullscreen Overlay Container -->
+    <div id="fullscreen-overlay">
+        <img id="fullscreen-img" src="">
+    </div>
+
+    <div class="viewer-controls">
+        <button class="btn" id="btn-layout">Auto-Layout Graph</button>
+        <button class="btn btn-secondary" id="btn-save">Export as PNG</button>
+        <button class="btn btn-figma" id="btn-figma">Export to Figma</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const container = document.getElementById('canvas-container');
+        const svgEdges = document.getElementById('edges');
+
+        let nodesData = {};
+        let edgesData = [];
+
+        socket.on('init_graph', (state) => {
+            nodesData = state.nodes;
+            edgesData = state.edges;
+            Object.values(nodesData).forEach(renderNode);
+            drawEdges();
+        });
+
+        socket.on('node_added', (nodeData) => {
+            nodesData[nodeData.id] = nodeData;
+            renderNode(nodeData);
+        });
+
+        socket.on('node_updated', (data) => {
+            nodesData[data.id].image = data.image;
+            const img = document.getElementById('img_' + data.id);
+            if (img) img.src = data.image;
+            // Also update the fullscreen image live if it's currently open!
+            const fsImg = document.getElementById('fullscreen-img');
+            if (fsImg.dataset.activeNode === data.id) fsImg.src = data.image;
+        });
+
+        socket.on('node_moved', (data) => {
+            if (nodesData[data.id]) {
+                nodesData[data.id].x = data.x;
+                nodesData[data.id].y = data.y;
+                const wrapper = document.getElementById(data.id);
+                if (wrapper) {
+                    wrapper.style.left = data.x + 'px';
+                    wrapper.style.top = data.y + 'px';
+                }
+                drawEdges();
+            }
+        });
+
+        socket.on('edge_added', (edge) => {
+            edgesData.push(edge);
+            drawEdges();
+        });
+
+        function resolveCollisions(activeId) {
+            const nodes = Object.values(nodesData);
+            const MIN_DIST = 170;
+            let moved = new Set();
+
+            for (let iter = 0; iter < 3; iter++) {
+                for (let i = 0; i < nodes.length; i++) {
+                    for (let j = i + 1; j < nodes.length; j++) {
+                        let n1 = nodes[i];
+                        let n2 = nodes[j];
+
+                        let dx = n2.x - n1.x;
+                        let dy = n2.y - n1.y;
+                        let dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+
+                        if (dist < MIN_DIST) {
+                            let overlap = MIN_DIST - dist;
+                            let pushX = (dx / dist) * overlap;
+                            let pushY = (dy / dist) * overlap;
+
+                            if (n1.id === activeId) {
+                                n2.x += pushX; n2.y += pushY;
+                                moved.add(n2.id);
+                            } else if (n2.id === activeId) {
+                                n1.x -= pushX; n1.y -= pushY;
+                                moved.add(n1.id);
+                            } else {
+                                n1.x -= pushX * 0.5; n1.y -= pushY * 0.5;
+                                n2.x += pushX * 0.5; n2.y += pushY * 0.5;
+                                moved.add(n1.id); moved.add(n2.id);
+                            }
+                        }
+                    }
+                }
+            }
+
+            moved.forEach(id => {
+                if (id === activeId) return;
+                let n = nodesData[id];
+                let el = document.getElementById(id);
+                if (el) {
+                    el.style.left = n.x + 'px';
+                    el.style.top = n.y + 'px';
+                }
+                socket.emit('move_node', { id: n.id, x: n.x, y: n.y });
+            });
+        }
+
+        // --- UPDATED: Smart Click vs Drag Logic ---
+        function renderNode(nodeData) {
+            if (document.getElementById(nodeData.id)) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.id = nodeData.id;
+            wrapper.className = 'node-wrapper';
+            wrapper.style.left = nodeData.x + 'px';
+            wrapper.style.top = nodeData.y + 'px';
+
+            const img = document.createElement('img');
+            img.src = nodeData.image;
+            img.id = 'img_' + nodeData.id;
+            img.className = 'node-img';
+
+            const label = document.createElement('div');
+            label.className = 'node-label';
+            label.innerText = nodeData.id;
+
+            wrapper.appendChild(img);
+            wrapper.appendChild(label);
+
+            wrapper.onmousedown = function (event) {
+                let shiftX = event.clientX - wrapper.getBoundingClientRect().left;
+                let shiftY = event.clientY - wrapper.getBoundingClientRect().top;
+
+                let isDragging = false;
+                let startX = event.clientX;
+                let startY = event.clientY;
+
+                function moveAt(pageX, pageY) {
+                    let newX = pageX - shiftX;
+                    let newY = pageY - shiftY;
+                    wrapper.style.left = newX + 'px';
+                    wrapper.style.top = newY + 'px';
+
+                    nodesData[nodeData.id].x = newX;
+                    nodesData[nodeData.id].y = newY;
+
+                    resolveCollisions(nodeData.id);
+                    drawEdges();
+                    socket.emit('move_node', { id: nodeData.id, x: newX, y: newY });
+                }
+
+                function onMouseMove(event) {
+                    // If the mouse moves more than 4 pixels, it's a drag, not a click
+                    if (Math.abs(event.clientX - startX) > 4 || Math.abs(event.clientY - startY) > 4) {
+                        isDragging = true;
+                    }
+                    if (isDragging) {
+                        moveAt(event.pageX, event.pageY);
+                    }
+                }
+
+                document.addEventListener('mousemove', onMouseMove);
+
+                wrapper.onmouseup = function () {
+                    document.removeEventListener('mousemove', onMouseMove);
+                    wrapper.onmouseup = null;
+
+                    // If they just clicked and released without dragging, trigger fullscreen
+                    if (!isDragging) {
+                        openFullscreen(nodeData.id, nodesData[nodeData.id].image);
+                    }
+                };
+            };
+
+            wrapper.ondragstart = () => false;
+            container.appendChild(wrapper);
+        }
+
+        // --- NEW: Fullscreen Open/Close Logic ---
+        const overlay = document.getElementById('fullscreen-overlay');
+        const fsImg = document.getElementById('fullscreen-img');
+
+        function openFullscreen(nodeId, imageSrc) {
+            fsImg.src = imageSrc;
+            fsImg.dataset.activeNode = nodeId; // Track which node is open for live updates
+            overlay.style.display = 'flex';
+            // Slight delay before adding the active class triggers the CSS popup animation
+            setTimeout(() => overlay.classList.add('active'), 10);
+        }
+
+        overlay.addEventListener('click', () => {
+            overlay.classList.remove('active');
+            // Wait for the fade-out animation to finish before hiding
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                fsImg.dataset.activeNode = '';
+            }, 200);
+        });
+
+        // ----------------------------------------------------
+        function drawEdges() {
+            svgEdges.innerHTML = '';
+            edgesData.forEach(edge => {
+                const source = nodesData[edge.source];
+                const target = nodesData[edge.target];
+
+                if (source && target) {
+                    const x1 = source.x + 75;
+                    const y1 = source.y + 75;
+                    const x2 = target.x + 75;
+                    const y2 = target.y + 75;
+
+                    const dx = Math.abs(x2 - x1);
+                    const cpOffset = dx * 0.5;
+
+                    const cx1 = x1 + (x2 > x1 ? cpOffset : -cpOffset);
+                    const cy1 = y1;
+                    const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
+                    const cy2 = y2;
+
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const pathString = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+
+                    path.setAttribute('d', pathString);
+                    path.setAttribute('class', 'connection-line');
+
+                    svgEdges.appendChild(path);
+                }
+            });
+        }
+
+        let isAnimating = false;
+
+        document.getElementById('btn-layout').addEventListener('click', () => {
+            if (isAnimating) return;
+
+            const nodes = Object.values(nodesData);
+            if (nodes.length === 0) return;
+            isAnimating = true;
+
+            const initialPos = {};
+            const targetPos = {};
+            nodes.forEach(n => {
+                initialPos[n.id] = { x: n.x, y: n.y };
+                targetPos[n.id] = { x: n.x, y: n.y };
+            });
+
+            const iterations = 150;
+            const idealSpringLength = 320;
+            const centerX = window.innerWidth / 2 - 75;
+            const centerY = window.innerHeight / 2 - 75;
+
+            for (let i = 0; i < iterations; i++) {
+                let forces = {};
+                nodes.forEach(n => forces[n.id] = { x: 0, y: 0 });
+                const temperature = 1 - (i / iterations);
+
+                for (let a = 0; a < nodes.length; a++) {
+                    for (let b = a + 1; b < nodes.length; b++) {
+                        let dx = targetPos[nodes[a].id].x - targetPos[nodes[b].id].x;
+                        let dy = targetPos[nodes[a].id].y - targetPos[nodes[b].id].y;
+                        let dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+
+                        let force = 60000 / (dist * dist);
+                        forces[nodes[a].id].x += (dx / dist) * force;
+                        forces[nodes[a].id].y += (dy / dist) * force;
+                        forces[nodes[b].id].x -= (dx / dist) * force;
+                        forces[nodes[b].id].y -= (dy / dist) * force;
+
+                        const MIN_DIST = 170;
+                        if (dist < MIN_DIST) {
+                            let overlap = MIN_DIST - dist;
+                            let pushX = (dx / dist) * overlap * 0.5;
+                            let pushY = (dy / dist) * overlap * 0.5;
+                            targetPos[nodes[a].id].x += pushX;
+                            targetPos[nodes[a].id].y += pushY;
+                            targetPos[nodes[b].id].x -= pushX;
+                            targetPos[nodes[b].id].y -= pushY;
+                        }
+                    }
+                }
+
+                edgesData.forEach(e => {
+                    if (targetPos[e.source] && targetPos[e.target]) {
+                        let dx = targetPos[e.target].x - targetPos[e.source].x;
+                        let dy = targetPos[e.target].y - targetPos[e.source].y;
+                        let dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+                        let force = (dist - idealSpringLength) * 0.1;
+
+                        forces[e.source].x += (dx / dist) * force;
+                        forces[e.source].y += (dy / dist) * force;
+                        forces[e.target].x -= (dx / dist) * force;
+                        forces[e.target].y -= (dy / dist) * force;
+                    }
+                });
+
+                nodes.forEach(n => {
+                    forces[n.id].x += (centerX - targetPos[n.id].x) * 0.05;
+                    forces[n.id].y += (centerY - targetPos[n.id].y) * 0.05;
+
+                    targetPos[n.id].x += Math.max(-25, Math.min(25, forces[n.id].x)) * temperature;
+                    targetPos[n.id].y += Math.max(-25, Math.min(25, forces[n.id].y)) * temperature;
+                });
+            }
+
+            const animationFrames = 25;
+            let frame = 0;
+
+            function snapFrame() {
+                frame++;
+                const progress = frame / animationFrames;
+                const ease = 1 - Math.pow(1 - progress, 3);
+
+                nodes.forEach(n => {
+                    const startX = initialPos[n.id].x;
+                    const startY = initialPos[n.id].y;
+                    const endX = targetPos[n.id].x;
+                    const endY = targetPos[n.id].y;
+
+                    n.x = startX + (endX - startX) * ease;
+                    n.y = startY + (endY - startY) * ease;
+
+                    const wrapper = document.getElementById(n.id);
+                    if (wrapper) {
+                        wrapper.style.left = n.x + 'px';
+                        wrapper.style.top = n.y + 'px';
+                    }
+                });
+
+                drawEdges();
+
+                if (frame < animationFrames) {
+                    requestAnimationFrame(snapFrame);
+                } else {
+                    nodes.forEach(n => {
+                        socket.emit('move_node', { id: n.id, x: n.x, y: n.y });
+                    });
+                    isAnimating = false;
+                }
+            }
+
+            snapFrame();
+        });
+
+        // ----------------------------------------------------
+        // EXPORT TO PNG LOGIC
+        // ----------------------------------------------------
+        document.getElementById('btn-save').addEventListener('click', () => {
+            const nodes = Object.values(nodesData);
+            if (nodes.length === 0) return alert("Nothing to export!");
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodes.forEach(n => {
+                if (n.x < minX) minX = n.x;
+                if (n.y < minY) minY = n.y;
+                if (n.x > maxX) maxX = n.x;
+                if (n.y > maxY) maxY = n.y;
+            });
+
+            minX -= 100; minY -= 100;
+            maxX += 250; maxY += 250;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = maxX - minX;
+            canvas.height = maxY - minY;
+            const ctx = canvas.getContext('2d');
+
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#cbd5e1';
+            for (let x = 0; x < canvas.width; x += 30) {
+                for (let y = 0; y < canvas.height; y += 30) {
+                    ctx.beginPath();
+                    ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+
+            ctx.strokeStyle = '#94a3b8';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+
+            edgesData.forEach(edge => {
+                const source = nodesData[edge.source];
+                const target = nodesData[edge.target];
+                if (source && target) {
+                    const x1 = source.x + 75 - minX;
+                    const y1 = source.y + 75 - minY;
+                    const x2 = target.x + 75 - minX;
+                    const y2 = target.y + 75 - minY;
+
+                    const dx = Math.abs(x2 - x1);
+                    const cpOffset = dx * 0.5;
+                    const cx1 = x1 + (x2 > x1 ? cpOffset : -cpOffset);
+                    const cy1 = y1;
+                    const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
+                    const cy2 = y2;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x1, y1);
+                    ctx.bezierCurveTo(cx1, cy1, cx2, cy2, x2, y2);
+                    ctx.stroke();
+                }
+            });
+
+            let loadedImages = 0;
+            nodes.forEach(n => {
+                const img = new Image();
+                img.onload = () => {
+                    const drawX = n.x - minX;
+                    const drawY = n.y - minY;
+
+                    ctx.shadowColor = 'rgba(0,0,0,0.15)';
+                    ctx.shadowBlur = 15;
+                    ctx.shadowOffsetY = 10;
+                    ctx.fillStyle = 'white';
+
+                    ctx.beginPath();
+                    ctx.roundRect(drawX, drawY, 150, 150, 16);
+                    ctx.fill();
+
+                    ctx.shadowColor = 'transparent';
+                    ctx.drawImage(img, drawX + 4, drawY + 4, 142, 142);
+
+                    ctx.font = 'bold 13px monospace';
+                    const textWidth = ctx.measureText(n.id).width;
+
+                    ctx.fillStyle = '#1e293b';
+                    ctx.beginPath();
+                    ctx.roundRect(drawX + 75 - (textWidth / 2) - 14, drawY + 135, textWidth + 28, 26, 13);
+                    ctx.fill();
+
+                    ctx.fillStyle = '#f8fafc';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(n.id, drawX + 75, drawY + 148);
+
+                    loadedImages++;
+                    if (loadedImages === nodes.length) {
+                        const dataUrl = canvas.toDataURL('image/png');
+                        const link = document.createElement('a');
+                        link.href = dataUrl;
+                        link.download = `Graph_Export_${new Date().getTime()}.png`;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                    }
+                };
+                img.src = n.image;
+            });
+        });
+
+        // ----------------------------------------------------
+        // EXPORT TO FIGMA LOGIC (SVG Generator)
+        // ----------------------------------------------------
+        document.getElementById('btn-figma').addEventListener('click', () => {
+            const nodes = Object.values(nodesData);
+            if (nodes.length === 0) return alert("Nothing to export!");
+
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            nodes.forEach(n => {
+                if (n.x < minX) minX = n.x;
+                if (n.y < minY) minY = n.y;
+                if (n.x > maxX) maxX = n.x;
+                if (n.y > maxY) maxY = n.y;
+            });
+
+            minX -= 100; minY -= 100;
+            maxX += 250; maxY += 250;
+            const width = maxX - minX;
+            const height = maxY - minY;
+
+            let svgStr = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`;
+
+            svgStr += `<rect width="100%" height="100%" fill="#f8fafc" />`;
+
+            svgStr += `<defs>`;
+            nodes.forEach(n => {
+                svgStr += `<clipPath id="clip-${n.id}"><rect x="${n.x - minX + 4}" y="${n.y - minY + 4}" width="142" height="142" rx="12" /></clipPath>`;
+            });
+            svgStr += `</defs>`;
+
+            edgesData.forEach(edge => {
+                const source = nodesData[edge.source];
+                const target = nodesData[edge.target];
+                if (source && target) {
+                    const x1 = source.x + 75 - minX;
+                    const y1 = source.y + 75 - minY;
+                    const x2 = target.x + 75 - minX;
+                    const y2 = target.y + 75 - minY;
+
+                    const dx = Math.abs(x2 - x1);
+                    const cpOffset = dx * 0.5;
+                    const cx1 = x1 + (x2 > x1 ? cpOffset : -cpOffset);
+                    const cy1 = y1;
+                    const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
+                    const cy2 = y2;
+
+                    svgStr += `<path d="M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}" fill="none" stroke="#94a3b8" stroke-width="5" stroke-linecap="round" />`;
+                }
+            });
+
+            nodes.forEach(n => {
+                const drawX = n.x - minX;
+                const drawY = n.y - minY;
+
+                svgStr += `<rect x="${drawX}" y="${drawY}" width="150" height="150" rx="16" fill="#ffffff" />`;
+
+                svgStr += `<image href="${n.image}" x="${drawX + 4}" y="${drawY + 4}" width="142" height="142" preserveAspectRatio="none" clip-path="url(#clip-${n.id})" />`;
+
+                const charWidth = 8;
+                const textWidth = n.id.length * charWidth;
+                const pillWidth = textWidth + 28;
+                const pillX = drawX + 75 - (pillWidth / 2);
+
+                svgStr += `<rect x="${pillX}" y="${drawY + 135}" width="${pillWidth}" height="26" rx="13" fill="#1e293b" />`;
+
+                svgStr += `<text x="${drawX + 75}" y="${drawY + 152}" font-family="monospace" font-size="13px" font-weight="bold" fill="#f8fafc" text-anchor="middle">${n.id}</text>`;
+            });
+
+            svgStr += `</svg>`;
+
+            const blob = new Blob([svgStr], { type: 'image/svg+xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `Graph_Export_Figma_${new Date().getTime()}.svg`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        });
+    </script>
+</body>
+
+</html>
