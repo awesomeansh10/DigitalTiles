@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
     });
 
     // 4. Create connections between nodes
-    socket.on('add_edge', (edgeData) => 
+    socket.on('add_edge', (edgeData) => {
         graphState.edges.push(edgeData);
         io.emit('edge_added', edgeData);
     });
