@@ -6,8 +6,10 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server);
 
-app.use(express.static('public'));
+const path = require('path');
 
+// This forces Express to look relative to where server.js actually lives
+app.use(express.static(path.join(__dirname, 'public')));
 let graphState = {
     nodes: {},
     edges: []
@@ -42,12 +44,12 @@ io.on('connection', (socket) => {
     });
 
     // 4. Create connections between nodes
-    socket.on('add_edge', (edgeData) => {
+    socket.on('add_edge', (edgeData) => 
         graphState.edges.push(edgeData);
         io.emit('edge_added', edgeData);
     });
 });
 
-server.listen(80, '0.0.0.0', () => {
-    console.log('Server running on port 80');
+server.listen(1234, '0.0.0.0', () => {
+    console.log('Server running on port 1234');
 });
