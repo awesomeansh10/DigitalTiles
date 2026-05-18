@@ -190,6 +190,50 @@
         drawCanvas.addEventListener('mouseup', () => isDrawing = false);
         drawCanvas.addEventListener('mouseout', () => isDrawing = false);
 
+        // Touch support
+        function getTouchPos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: evt.touches[0].clientX - rect.left,
+                y: evt.touches[0].clientY - rect.top
+            };
+        }
+
+        drawCanvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            isDrawing = true;
+            const pos = getTouchPos(drawCanvas, e);
+            lastX = pos.x;
+            lastY = pos.y;
+        }, { passive: false });
+        
+        drawCanvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            if (!isDrawing) return;
+            
+            const pos = getTouchPos(drawCanvas, e);
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.stroke();
+            
+            lastX = pos.x;
+            lastY = pos.y;
+            
+            socket.emit('update_node', { id: myNodeId, image: drawCanvas.toDataURL() });
+        }, { passive: false });
+
+        drawCanvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            isDrawing = false;
+        });
+
+        drawCanvas.addEventListener('touchcancel', (e) => {
+            e.preventDefault();
+            isDrawing = false;
+        });
+
         document.getElementById('connect-btn').addEventListener('click', () => {
             const rawInput = document.getElementById('target-id').value;
             if(rawInput) {
