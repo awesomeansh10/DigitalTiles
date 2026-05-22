@@ -137,11 +137,12 @@
             justify-content: center;
             align-items: center;
             backdrop-filter: blur(8px);
+            cursor: zoom-out;
             opacity: 0;
             transition: opacity 0.2s ease;
         }
 
-        #fullscreen-canvas {
+        #fullscreen-img {
             background-color: white;
             /* <-- Add this line */
             max-width: 85%;
@@ -152,7 +153,6 @@
             object-fit: contain;
             transform: scale(0.9);
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            cursor: crosshair;
         }
 
         /* Classes added via JS to animate the popup */
@@ -160,7 +160,7 @@
             opacity: 1;
         }
 
-        #fullscreen-overlay.active #fullscreen-canvas {
+        #fullscreen-overlay.active #fullscreen-img {
             transform: scale(1);
         }
     </style>
@@ -173,7 +173,7 @@
 
     <!-- NEW: The Fullscreen Overlay Container -->
     <div id="fullscreen-overlay">
-        <canvas id="fullscreen-canvas"></canvas>
+        <img id="fullscreen-img" src="">
     </div>
 
     <div class="viewer-controls">
@@ -190,7 +190,6 @@
 
         let nodesData = {};
         let edgesData = [];
-        let fsIsDrawing = false; // Used to prevent incoming updates from wiping active drawings
 
         socket.on('init_graph', (state) => {
             nodesData = state.nodes;
@@ -208,18 +207,9 @@
             nodesData[data.id].image = data.image;
             const img = document.getElementById('img_' + data.id);
             if (img) img.src = data.image;
-            
-            // Also update the fullscreen canvas live if it's currently open!
-            const fsCanvas = document.getElementById('fullscreen-canvas');
-            if (fsCanvas && fsCanvas.dataset.activeNode === data.id && !fsIsDrawing) {
-                const fsCtx = fsCanvas.getContext('2d');
-                const newImg = new Image();
-                newImg.onload = () => {
-                    fsCtx.clearRect(0, 0, fsCanvas.width, fsCanvas.height);
-                    fsCtx.drawImage(newImg, 0, 0);
-                };
-                newImg.src = data.image;
-            }
+            // Also update the fullscreen image live if it's currently open!
+            const fsImg = document.getElementById('fullscreen-img');
+            if (fsImg.dataset.activeNode === data.id) fsImg.src = data.image;
         });
 
         socket.on('node_moved', (data) => {
@@ -361,101 +351,24 @@
 
         // --- NEW: Fullscreen Open/Close Logic ---
         const overlay = document.getElementById('fullscreen-overlay');
-        const fsCanvas = document.getElementById('fullscreen-canvas');
-        const fsCtx = fsCanvas.getContext('2d');
-        let fsLastX = 0;
-        let fsLastY = 0;
+        const fsImg = document.getElementById('fullscreen-img');
 
         function openFullscreen(nodeId, imageSrc) {
-            fsCanvas.dataset.activeNode = nodeId; // Track which node is open for live updates
+            fsImg.src = imageSrc;
+            fsImg.dataset.activeNode = nodeId; // Track which node is open for live updates
             overlay.style.display = 'flex';
-            
-            const img = new Image();
-            img.onload = () => {
-                fsCanvas.width = img.width;
-                fsCanvas.height = img.height;
-                fsCtx.drawImage(img, 0, 0);
-            };
-            img.src = imageSrc;
-            
             // Slight delay before adding the active class triggers the CSS popup animation
             setTimeout(() => overlay.classList.add('active'), 10);
         }
 
-        overlay.addEventListener('mousedown', (e) => {
-            // Ensure we only close if clicking the dark overlay background, not the canvas
-            if (e.target === overlay) {
-                overlay.classList.remove('active');
-                // Wait for the fade-out animation to finish before hiding
-                setTimeout(() => {
-                    overlay.style.display = 'none';
-                    fsCanvas.dataset.activeNode = '';
-                }, 200);
-            }
+        overlay.addEventListener('click', () => {
+            overlay.classList.remove('active');
+            // Wait for the fade-out animation to finish before hiding
+            setTimeout(() => {
+                overlay.style.display = 'none';
+                fsImg.dataset.activeNode = '';
+            }, 200);
         });
-
-        function getCanvasPos(evt) {
-            const rect = fsCanvas.getBoundingClientRect();
-            // Account for any CSS scaling applied to the canvas
-            const scaleX = fsCanvas.width / rect.width;
-            const scaleY = fsCanvas.height / rect.height;
-            let clientX = evt.clientX;
-            let clientY = evt.clientY;
-            
-            if (evt.touches && evt.touches.length > 0) {
-                clientX = evt.touches[0].clientX;
-                clientY = evt.touches[0].clientY;
-            }
-            
-            return {
-                x: (clientX - rect.left) * scaleX,
-                y: (clientY - rect.top) * scaleY
-            };
-        }
-
-        function startDrawing(e) {
-            fsIsDrawing = true;
-            const pos = getCanvasPos(e);
-            fsLastX = pos.x;
-            fsLastY = pos.y;
-        }
-
-        function draw(e) {
-            if (!fsIsDrawing) return;
-            const pos = getCanvasPos(e);
-            
-            fsCtx.lineCap = 'round';
-            fsCtx.lineJoin = 'round';
-            fsCtx.lineWidth = 4;
-            fsCtx.strokeStyle = '#000000'; // Default brush color
-            
-            fsCtx.beginPath();
-            fsCtx.moveTo(fsLastX, fsLastY);
-            fsCtx.lineTo(pos.x, pos.y);
-            fsCtx.stroke();
-            
-            fsLastX = pos.x;
-            fsLastY = pos.y;
-            
-            const nodeId = fsCanvas.dataset.activeNode;
-            if (nodeId) {
-                socket.emit('update_node', { id: nodeId, image: fsCanvas.toDataURL() });
-            }
-        }
-
-        function stopDrawing() {
-            fsIsDrawing = false;
-        }
-
-        fsCanvas.addEventListener('mousedown', startDrawing);
-        fsCanvas.addEventListener('mousemove', draw);
-        fsCanvas.addEventListener('mouseup', stopDrawing);
-        fsCanvas.addEventListener('mouseout', stopDrawing);
-
-        fsCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e); }, { passive: false });
-        fsCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, { passive: false });
-        fsCanvas.addEventListener('touchend', stopDrawing);
-        fsCanvas.addEventListener('touchcancel', stopDrawing);
 
         // ----------------------------------------------------
         function drawEdges() {
