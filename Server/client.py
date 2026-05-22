@@ -29,6 +29,16 @@ def connect():
         'color': '#a855f7' # Changes brush to purple
     })
     
+    # Example 4: Send command to switch active node
+    target_device = "Tile0" # Also known as Tile ID
+    target_node = 2 # Node number
+    print(f"Sending 'python_update' command to switch active node on {target_device} to node number {target_node}")
+    sio.emit('python_update', {
+        'action': 'switch_node',
+        'deviceId': target_device,
+        'nodeNumber': target_node
+    })
+
     # Example 2: Trigger the 'add_edge' function to connect nodes
     # sio.emit('add_edge', {'source': node_id, 'target': 'node_1'})
 

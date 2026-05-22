@@ -129,7 +129,7 @@
         let lastY = 0;
 
         // Device ID that can be configured at the start of the script
-        const DEVICE_ID = prompt("Enter Device ID:", "Device_" + Math.floor(Math.random() * 1000)) || "Device_" + Math.floor(Math.random() * 1000);
+        const DEVICE_ID = "Tile0" //CONFIGURE THIS
         
         // Node numbers go up sequentially starting from 0
         let nodeCounter = 0;
@@ -144,6 +144,63 @@
             if (data.action === 'change_color' && data.color) {
                 ctx.strokeStyle = data.color;
                 colorPicker.value = data.color;
+            } else if (data.action === 'switch_node' && data.deviceId === DEVICE_ID) {
+                const targetNodeId = DEVICE_ID + '_node_' + data.nodeNumber;
+                let foundIndex = myNodes.findIndex(n => n.id === targetNodeId);
+
+                if (foundIndex !== -1) {
+                    // Switch to existing node
+                    if (currentNodeIndex !== foundIndex) {
+                        myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
+                        
+                        currentNodeIndex = foundIndex;
+                        const activeNode = myNodes[currentNodeIndex];
+                        
+                        document.getElementById('my-id').innerText = activeNode.id;
+                        
+                        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                        if (activeNode.image && activeNode.image !== 'data:,') {
+                            const img = new Image();
+                            img.onload = () => ctx.drawImage(img, 0, 0);
+                            img.src = activeNode.image;
+                        }
+                        
+                        ctx.strokeStyle = colorPicker.value;
+                        ctx.lineCap = 'round';
+                        ctx.lineJoin = 'round';
+                        ctx.lineWidth = 4;
+                    }
+                } else {
+                    // Create new node if it does not exist
+                    if (currentNodeIndex >= 0) {
+                        myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
+                    }
+                    
+                    const newNode = {
+                        id: targetNodeId,
+                        deviceId: DEVICE_ID,
+                        image: 'data:,' // empty image initially
+                    };
+                    myNodes.push(newNode);
+                    currentNodeIndex = myNodes.length - 1;
+                    
+                    document.getElementById('my-device-id').innerText = DEVICE_ID;
+                    document.getElementById('my-id').innerText = targetNodeId;
+                    
+                    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                    
+                    socket.emit('add_node', {
+                        id: targetNodeId,
+                        deviceId: DEVICE_ID,
+                        x: Math.random() * 400 + 100,
+                        y: Math.random() * 400 + 100,
+                        image: drawCanvas.toDataURL()
+                    });
+                    
+                    if (data.nodeNumber >= nodeCounter) {
+                        nodeCounter = data.nodeNumber + 1;
+                    }
+                }
             }
         });
 
