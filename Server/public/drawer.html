@@ -90,7 +90,7 @@
     
     <div class="controls-overlay">
         <div class="header-info">
-            <span>My Node ID: <span id="my-id"></span></span>
+            <span>Tile: <span id="my-tile-id"></span> | Node: <span id="my-id"></span></span>
             <input type="color" id="brush-color" value="#000000" title="Custom color picker">
         </div>
         
@@ -110,6 +110,10 @@
             <input type="text" id="target-id" placeholder="IDs (e.g. node_1, node_2)">
             <button id="connect-btn" class="btn">Connect Nodes</button>
         </div>
+        <div class="action-row">
+            <button id="new-node-btn" class="btn" style="background-color: #10b981;">New Node</button>
+            <button id="switch-tile-btn" class="btn" style="background-color: #8b5cf6;">Switch Tile</button>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -123,6 +127,63 @@
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
+
+        // Variable to assign a tile ID
+        let currentTileId = 'Tile_' + Math.floor(Math.random() * 100);
+        
+        // Store multiple nodes for this tile
+        let myNodes = [];
+        let currentNodeIndex = -1;
+
+        function createNewNode() {
+            const newNodeId = 'node_' + Math.floor(Math.random() * 1000);
+            const newNode = {
+                id: newNodeId,
+                tileId: currentTileId,
+                image: 'data:,' // empty image initially
+            };
+            myNodes.push(newNode);
+            currentNodeIndex = myNodes.length - 1;
+            
+            document.getElementById('my-tile-id').innerText = currentTileId;
+            document.getElementById('my-id').innerText = newNodeId;
+            
+            ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            
+            socket.emit('add_node', {
+                id: newNodeId,
+                tileId: currentTileId,
+                x: Math.random() * 400 + 100,
+                y: Math.random() * 400 + 100,
+                image: drawCanvas.toDataURL()
+            });
+        }
+
+        function switchTile() {
+            if (myNodes.length <= 1) return;
+            
+            // Save current canvas to current node before switching
+            myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
+            
+            // Cycle index
+            currentNodeIndex = (currentNodeIndex + 1) % myNodes.length;
+            const activeNode = myNodes[currentNodeIndex];
+            
+            document.getElementById('my-id').innerText = activeNode.id;
+            
+            // Load saved image
+            ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+            if (activeNode.image && activeNode.image !== 'data:,') {
+                const img = new Image();
+                img.onload = () => ctx.drawImage(img, 0, 0);
+                img.src = activeNode.image;
+            }
+            // Update stroke style in case it was lost during clear
+            ctx.strokeStyle = colorPicker.value;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.lineWidth = 4;
+        }
 
         function resizeCanvas() {
             const currentImg = drawCanvas.toDataURL();
@@ -157,15 +218,8 @@
             });
         });
 
-        const myNodeId = 'node_' + Math.floor(Math.random() * 1000);
-        document.getElementById('my-id').innerText = myNodeId;
-
-        socket.emit('add_node', {
-            id: myNodeId,
-            x: Math.random() * 400 + 100,
-            y: Math.random() * 400 + 100,
-            image: drawCanvas.toDataURL()
-        });
+        // Initialize the first node
+        createNewNode();
 
         drawCanvas.addEventListener('mousedown', (e) => {
             isDrawing = true;
@@ -184,7 +238,9 @@
             lastX = e.offsetX;
             lastY = e.offsetY;
             
-            socket.emit('update_node', { id: myNodeId, image: drawCanvas.toDataURL() });
+            const currentImg = drawCanvas.toDataURL();
+            myNodes[currentNodeIndex].image = currentImg;
+            socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
         });
 
         drawCanvas.addEventListener('mouseup', () => isDrawing = false);
@@ -221,7 +277,9 @@
             lastX = pos.x;
             lastY = pos.y;
             
-            socket.emit('update_node', { id: myNodeId, image: drawCanvas.toDataURL() });
+            const currentImg = drawCanvas.toDataURL();
+            myNodes[currentNodeIndex].image = currentImg;
+            socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
         }, { passive: false });
 
         drawCanvas.addEventListener('touchend', (e) => {
@@ -236,7 +294,8 @@
 
         document.getElementById('connect-btn').addEventListener('click', () => {
             const rawInput = document.getElementById('target-id').value;
-            if(rawInput) {
+            if(rawInput && currentNodeIndex >= 0) {
+                const myNodeId = myNodes[currentNodeIndex].id;
                 const targets = rawInput.split(',').map(id => id.trim()).filter(id => id !== '');
                 targets.forEach(targetId => {
                     socket.emit('add_edge', { source: myNodeId, target: targetId });
@@ -244,6 +303,9 @@
                 document.getElementById('target-id').value = ''; 
             }
         });
+
+        document.getElementById('new-node-btn').addEventListener('click', createNewNode);
+        document.getElementById('switch-tile-btn').addEventListener('click', switchTile);
     </script>
 </body>
 </html>
