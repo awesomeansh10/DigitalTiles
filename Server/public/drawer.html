@@ -90,7 +90,7 @@
     
     <div class="controls-overlay">
         <div class="header-info">
-            <span>Tile: <span id="my-tile-id"></span> | Node: <span id="my-id"></span></span>
+            <span>Device: <span id="my-device-id"></span> | Node: <span id="my-id"></span></span>
             <input type="color" id="brush-color" value="#000000" title="Custom color picker">
         </div>
         
@@ -112,7 +112,7 @@
         </div>
         <div class="action-row">
             <button id="new-node-btn" class="btn" style="background-color: #10b981;">New Node</button>
-            <button id="switch-tile-btn" class="btn" style="background-color: #8b5cf6;">Switch Tile</button>
+            <button id="switch-node-btn" class="btn" style="background-color: #8b5cf6;">Switch Node</button>
         </div>
     </div>
 
@@ -128,38 +128,50 @@
         let lastX = 0;
         let lastY = 0;
 
-        // Variable to assign a tile ID
-        let currentTileId = 'Tile_' + Math.floor(Math.random() * 100);
+        // Device ID that can be configured at the start of the script
+        const DEVICE_ID = prompt("Enter Device ID:", "Device_" + Math.floor(Math.random() * 1000)) || "Device_" + Math.floor(Math.random() * 1000);
         
-        // Store multiple nodes for this tile
+        // Node numbers go up sequentially starting from 0
+        let nodeCounter = 0;
+
+        // Store multiple nodes for this device
         let myNodes = [];
         let currentNodeIndex = -1;
 
+        // Listen for custom events broadcasted from the Python script
+        socket.on('python_update', (data) => {
+            console.log("Received command from Python:", data);
+            if (data.action === 'change_color' && data.color) {
+                ctx.strokeStyle = data.color;
+                colorPicker.value = data.color;
+            }
+        });
+
         function createNewNode() {
-            const newNodeId = 'node_' + Math.floor(Math.random() * 1000);
+            const newNodeId = DEVICE_ID + '_node_' + nodeCounter++;
             const newNode = {
                 id: newNodeId,
-                tileId: currentTileId,
+                deviceId: DEVICE_ID,
                 image: 'data:,' // empty image initially
             };
             myNodes.push(newNode);
             currentNodeIndex = myNodes.length - 1;
             
-            document.getElementById('my-tile-id').innerText = currentTileId;
+            document.getElementById('my-device-id').innerText = DEVICE_ID;
             document.getElementById('my-id').innerText = newNodeId;
             
             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
             
             socket.emit('add_node', {
                 id: newNodeId,
-                tileId: currentTileId,
+                deviceId: DEVICE_ID,
                 x: Math.random() * 400 + 100,
                 y: Math.random() * 400 + 100,
                 image: drawCanvas.toDataURL()
             });
         }
 
-        function switchTile() {
+        function switchNode() {
             if (myNodes.length <= 1) return;
             
             // Save current canvas to current node before switching
@@ -305,7 +317,7 @@
         });
 
         document.getElementById('new-node-btn').addEventListener('click', createNewNode);
-        document.getElementById('switch-tile-btn').addEventListener('click', switchTile);
+        document.getElementById('switch-node-btn').addEventListener('click', switchNode);
     </script>
 </body>
 </html>

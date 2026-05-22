@@ -1,51 +1,45 @@
 import socketio
-import time
 import random
-import threading
+import time
 
-# Create a standard Socket.IO client
+# Create a Socket.IO client
 sio = socketio.Client()
-
-# A simple transparent 1x1 PNG as a placeholder image
-DUMMY_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII="
 
 @sio.event
 def connect():
-    print("Connected to the Socket.IO server!")
+    print("Connected to the Node.js server!")
     
-    # Generate a random ID for the Python node
+    # Example 1: Trigger the 'add_node' function
     node_id = f"python_node_{random.randint(100, 999)}"
+    tile_id = "Tile_Python"
     
-    # Emulate the payload sent by drawer.html
-    payload = {
+    print(f"Triggering 'add_node' for {node_id}")
+    sio.emit('add_node', {
         'id': node_id,
-        'x': random.randint(100, 500),
-        'y': random.randint(100, 500),
-        'image': DUMMY_IMAGE
-    }
+        'tileId': tile_id,
+        'x': random.uniform(100, 400),
+        'y': random.uniform(100, 400),
+        'image': 'data:,' # Provide a base64 image string here if needed
+    })
     
-    print(f"Emitting 'add_node' for {node_id}")
-    sio.emit('add_node', payload)
+    # Example 3: Send a custom event that drawer.html will listen to
+    print("Sending 'python_update' command to change brush color")
+    sio.emit('python_update', {
+        'action': 'change_color',
+        'color': '#a855f7' # Changes brush to purple
+    })
     
-    # Example of delayed edge creation
-    def interact():
-        time.sleep(2)
-        target_id = input(f"\n[{node_id}] Enter a target node ID to connect to (or press Enter to skip): ")
-        if target_id.strip():
-            sio.emit('add_edge', {'source': node_id, 'target': target_id.strip()})
-            print(f"Emitted 'add_edge' from {node_id} to {target_id}")
+    # Example 2: Trigger the 'add_edge' function to connect nodes
+    # sio.emit('add_edge', {'source': node_id, 'target': 'node_1'})
 
-    threading.Thread(target=interact, daemon=True).start()
-    
 @sio.event
 def disconnect():
     print("Disconnected from server")
 
 if __name__ == '__main__':
-    # Adjust the port if your Node.js server uses a different one
-    SERVER_URL = 'http://localhost:3000'
-    try:
-        sio.connect(SERVER_URL)
-        sio.wait()
-    except Exception as e:
-        print(f"Connection failed: {e}")
+    # Connect to your Node.js Socket.IO server.
+    # Adjust the URL and port (e.g., 3000) to match your server configuration.
+    sio.connect('http://tiles.anshagarwal.net:1234')
+    
+    # Keep the connection alive
+    sio.wait()

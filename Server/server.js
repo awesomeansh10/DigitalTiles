@@ -48,6 +48,11 @@ io.on('connection', (socket) => {
         graphState.edges.push(edgeData);
         io.emit('edge_added', edgeData);
     });
+    
+    socket.on('python_update', (data) => {
+        socket.broadcast.emit('python_update', data);
+    });
+
 });
 
 server.listen(1234, '0.0.0.0', () => {
