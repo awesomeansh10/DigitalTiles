@@ -22,18 +22,20 @@ def switch_active_node(node_number):
         print("Connected to the Node.js server!")
         print(f"Sending command to switch device '{device_id}' to node number {node_number}")
 
-        def on_emit_done():
-            """Callback function for when the emit is acknowledged."""
-            print("Command sent successfully. Disconnecting.")
-            sio.disconnect()
-
         sio.emit('python_update', {
             'action': 'switch_node',
             'deviceId': device_id,
             'nodeNumber': node_number
-        }, callback=on_emit_done)
+        })
         
         emitted_and_disconnecting = True
+        
+        def disconnect_task():
+            time.sleep(0.1)
+            print("Command sent successfully. Disconnecting.")
+            sio.disconnect()
+            
+        sio.start_background_task(disconnect_task)
 
     @sio.event
     def disconnect():
