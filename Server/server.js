@@ -48,6 +48,20 @@ io.on('connection', (socket) => {
         graphState.edges.push(edgeData);
         io.emit('edge_added', edgeData);
     });
+
+    // 5. Connect all nodes from one tile to another
+    socket.on('connect_tiles', (data) => {
+        const sourceNodes = Object.values(graphState.nodes).filter(n => n.deviceId === data.source);
+        const targetNodes = Object.values(graphState.nodes).filter(n => n.deviceId === data.target);
+        
+        sourceNodes.forEach(sourceNode => {
+            targetNodes.forEach(targetNode => {
+                const edgeData = { source: sourceNode.id, target: targetNode.id };
+                graphState.edges.push(edgeData);
+                io.emit('edge_added', edgeData);
+            });
+        });
+    });
     
     socket.on('python_update', (data) => {
         socket.broadcast.emit('python_update', data);
