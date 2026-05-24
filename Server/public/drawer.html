@@ -129,14 +129,27 @@
         let lastY = 0;
 
         // Device ID that can be configured at the start of the script
-        const DEVICE_ID = "Tile0" //CONFIGURE THIS
+        const DEVICE_ID = "Tile1" //CONFIGURE THIS
         
-        // Node numbers go up sequentially starting from 0
-        let nodeCounter = 0;
+        // Node numbers go up sequentially starting from 1
+        let nodeCounter = 1;
 
         // Store multiple nodes for this device
         let myNodes = [];
         let currentNodeIndex = -1;
+
+        socket.on('toggle_menu', (data) => {
+            if (data.deviceId === DEVICE_ID) {
+                const overlay = document.querySelector('.controls-overlay');
+                if (overlay) {
+                    if (overlay.style.display === 'none') {
+                        overlay.style.display = 'flex';
+                    } else {
+                        overlay.style.display = 'none';
+                    }
+                }
+            }
+        });
 
         // Listen for custom events broadcasted from the Python script
         socket.on('python_update', (data) => {

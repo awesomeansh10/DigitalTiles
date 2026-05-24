@@ -99,7 +99,32 @@ io.on('connection', (socket) => {
             });
         });
     });
+
+    // 6. Disconnect all nodes from one tile to another
+    socket.on('disconnect_tiles', (data) => {
+        // Remove the connection between the tiles
+        graphState.tileConnections = graphState.tileConnections.filter(
+            conn => !(conn.source === data.source && conn.target === data.target)
+        );
+
+        const sourceNodeIds = Object.values(graphState.nodes).filter(n => n.deviceId === data.source).map(n => n.id);
+        const targetNodeIds = Object.values(graphState.nodes).filter(n => n.deviceId === data.target).map(n => n.id);
+        
+        const edgesToRemove = graphState.edges.filter(
+            e => sourceNodeIds.includes(e.source) && targetNodeIds.includes(e.target)
+        );
+        graphState.edges = graphState.edges.filter(e => !edgesToRemove.includes(e));
+
+        edgesToRemove.forEach(edgeData => {
+            io.emit('edge_removed', edgeData);
+        });
+    });
     
+    // 7. Toggle Menu
+    socket.on('toggle_menu', (data) => {
+        io.emit('toggle_menu', data);
+    });
+
     socket.on('python_update', (data) => {
         socket.broadcast.emit('python_update', data);
     });
