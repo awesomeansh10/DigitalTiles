@@ -128,8 +128,10 @@
         let lastX = 0;
         let lastY = 0;
 
-        // Device ID that can be configured at the start of the script
-        const DEVICE_ID = "Tile1" //CONFIGURE THIS
+        // Device ID can be configured via URL (e.g., ?deviceId=Tile2) or defaults to Tile1
+        //http://tiles.anshagarwal.net:1234/drawer.html?deviceId=Tile2
+        const urlParams = new URLSearchParams(window.location.search);
+        const DEVICE_ID = urlParams.get('deviceId') || "Tile1"; 
         
         // Node numbers go up sequentially starting from 1
         let nodeCounter = 1;

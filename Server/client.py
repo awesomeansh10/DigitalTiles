@@ -1,11 +1,16 @@
 import socketio
 import time
 import serial
+import os
+from dotenv import load_dotenv
 from gpiozero import RotaryEncoder, Button
+
+# Load environment variables from .env file
+load_dotenv()
 
 # --- Global Configuration ---
 server_url='http://tiles.anshagarwal.net:1234'
-device_id = "Tile1"
+device_id = os.environ.get("DEVICE_ID", "Tile1")
 connected_tiles = [0,0,0,0]
 # 1. Create a single, persistent client instance
 sio = socketio.Client()
