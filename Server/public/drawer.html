@@ -332,7 +332,7 @@
         createNewNode();
 // Unified Pointer Events (Handles Mouse, Touch, and Pen simultaneously)
 let lastSyncTime = 0;
-        const SYNC_INTERVAL = 150; // Sync to network every 150 milliseconds (adjust if needed)
+        const SYNC_INTERVAL = 1000; // Sync to network every 150 milliseconds (adjust if needed)
 
         // Unified Pointer Events
         drawCanvas.addEventListener('pointerdown', (e) => {
@@ -376,7 +376,7 @@ let lastSyncTime = 0;
         drawCanvas.addEventListener('pointerup', endDrawing);
         drawCanvas.addEventListener('pointerout', endDrawing);
         drawCanvas.addEventListener('pointercancel', endDrawing);
-        
+
 
 
         document.getElementById('connect-btn').addEventListener('click', () => {
