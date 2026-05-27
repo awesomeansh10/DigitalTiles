@@ -331,6 +331,10 @@
         // Initialize the first node
         createNewNode();
 // Unified Pointer Events (Handles Mouse, Touch, and Pen simultaneously)
+let lastSyncTime = 0;
+        const SYNC_INTERVAL = 150; // Sync to network every 150 milliseconds (adjust if needed)
+
+        // Unified Pointer Events
         drawCanvas.addEventListener('pointerdown', (e) => {
             isDrawing = true;
             lastX = e.offsetX;
@@ -340,6 +344,7 @@
         drawCanvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
             
+            // 1. Draw to the local screen instantly
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(e.offsetX, e.offsetY);
@@ -348,18 +353,32 @@
             lastX = e.offsetX;
             lastY = e.offsetY;
             
-            // Throttle this in production if network gets congested!
-            const currentImg = drawCanvas.toDataURL();
-            myNodes[currentNodeIndex].image = currentImg;
-            socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+            // 2. Throttle the expensive toDataURL and Socket operations
+            const now = Date.now();
+            if (now - lastSyncTime > SYNC_INTERVAL) {
+                const currentImg = drawCanvas.toDataURL();
+                myNodes[currentNodeIndex].image = currentImg;
+                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+                lastSyncTime = now;
+            }
         });
 
-        drawCanvas.addEventListener('pointerup', () => isDrawing = false);
-        drawCanvas.addEventListener('pointerout', () => isDrawing = false);
-        drawCanvas.addEventListener('pointercancel', () => isDrawing = false);
+        // Ensure a final sync happens exactly when the stroke ends
+        function endDrawing() {
+            if (isDrawing) {
+                isDrawing = false;
+                const currentImg = drawCanvas.toDataURL();
+                myNodes[currentNodeIndex].image = currentImg;
+                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+            }
+        }
 
-
+        drawCanvas.addEventListener('pointerup', endDrawing);
+        drawCanvas.addEventListener('pointerout', endDrawing);
+        drawCanvas.addEventListener('pointercancel', endDrawing);
         
+
+
         document.getElementById('connect-btn').addEventListener('click', () => {
             const rawInput = document.getElementById('target-id').value;
             if(rawInput && currentNodeIndex >= 0) {
