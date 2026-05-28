@@ -354,13 +354,13 @@ let lastSyncTime = 0;
             lastY = e.offsetY;
             
             // 2. Throttle the expensive toDataURL and Socket operations
-            const now = Date.now();
-            if (now - lastSyncTime > SYNC_INTERVAL) {
-                const currentImg = drawCanvas.toDataURL();
-                myNodes[currentNodeIndex].image = currentImg;
-                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
-                lastSyncTime = now;
-            }
+            // const now = Date.now();
+            // if (now - lastSyncTime > SYNC_INTERVAL) {
+            //     const currentImg = drawCanvas.toDataURL();
+            //     myNodes[currentNodeIndex].image = currentImg;
+            //     socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+            //     lastSyncTime = now;
+            // }
         });
 
         // // Ensure a final sync happens exactly when the stroke ends
