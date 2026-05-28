@@ -159,6 +159,7 @@
         const colorSquares = document.querySelectorAll('.color-square');
         
         let isDrawing = false;
+        let activePointerId = null;
         let lastX = 0;
         let lastY = 0;
         let currentColor = '#000000';
@@ -323,7 +324,7 @@
 
         // Update brush from the preset squares
         colorSquares.forEach(square => {
-            square.addEventListener('click', (e) => {
+            square.addEventListener('pointerdown', (e) => {
                 const selectedColor = e.target.getAttribute('data-color');
                 currentColor = selectedColor;
                 ctx.strokeStyle = currentColor; // Change brush color
@@ -338,9 +339,19 @@ let lastSyncTime = 0;
 
         // Unified Pointer Events
         drawCanvas.addEventListener('pointerdown', (e) => {
+            if (isDrawing) {
+                if (e.isPrimary) {
+                    endDrawing({ pointerId: activePointerId });
+                } else {
+                    return; // Ignore multi-touch/stray fingers
+                }
+            }
+            
             isDrawing = true;
+            activePointerId = e.pointerId;
             lastX = e.clientX;
             lastY = e.clientY;
+            pendingPoints = [];
             drawCanvas.setPointerCapture(e.pointerId);
         });
         
@@ -364,7 +375,7 @@ let lastSyncTime = 0;
         }
 
         drawCanvas.addEventListener('pointermove', (e) => {
-            if (!isDrawing) return;
+            if (!isDrawing || e.pointerId !== activePointerId) return;
             
             const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
             for (let ev of events) {
@@ -378,8 +389,9 @@ let lastSyncTime = 0;
 
         // // Ensure a final sync happens exactly when the stroke ends
         function endDrawing(e) {
-            if (isDrawing) {
+            if (isDrawing && e.pointerId === activePointerId) {
                 isDrawing = false;
+                activePointerId = null;
 
                 // Finish any pending strokes before capturing the image
                 if (drawingRAF) {
@@ -390,19 +402,23 @@ let lastSyncTime = 0;
                 const currentImg = drawCanvas.toDataURL();
                 myNodes[currentNodeIndex].image = currentImg;
                 socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
-                if (e && e.pointerId && drawCanvas.hasPointerCapture && drawCanvas.hasPointerCapture(e.pointerId)) {
-                    drawCanvas.releasePointerCapture(e.pointerId);
+                
+                try {
+                    if (e && e.pointerId !== undefined && drawCanvas.hasPointerCapture && drawCanvas.hasPointerCapture(e.pointerId)) {
+                        drawCanvas.releasePointerCapture(e.pointerId);
+                    }
+                } catch (err) {
+                    // Ignore legacy browser release capture errors
                 }
             }
         }
 
         drawCanvas.addEventListener('pointerup', endDrawing);
-        drawCanvas.addEventListener('pointerout', endDrawing);
         drawCanvas.addEventListener('pointercancel', endDrawing);
 
 
 
-        document.getElementById('connect-btn').addEventListener('click', () => {
+        document.getElementById('connect-btn').addEventListener('pointerdown', () => {
             const rawInput = document.getElementById('target-id').value;
             if(rawInput && currentNodeIndex >= 0) {
                 const myNodeId = myNodes[currentNodeIndex].id;
@@ -414,8 +430,8 @@ let lastSyncTime = 0;
             }
         });
 
-        document.getElementById('new-node-btn').addEventListener('click', createNewNode);
-        document.getElementById('switch-node-btn').addEventListener('click', switchNode);
+        document.getElementById('new-node-btn').addEventListener('pointerdown', createNewNode);
+        document.getElementById('switch-node-btn').addEventListener('pointerdown', switchNode);
 
         function toggleDebugMenu() {
             const debugMenu = document.getElementById('debug-menu');
