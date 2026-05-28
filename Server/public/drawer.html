@@ -4,7 +4,7 @@
     <title>Draw Node</title>
     <style>
         body, html { margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; background: #fff; }
-        canvas { display: block; cursor: crosshair; }
+        canvas { display: block; cursor: crosshair; touch-action: none; }
         
         .controls-overlay {
             position: fixed;
@@ -162,6 +162,8 @@
         let lastX = 0;
         let lastY = 0;
         let currentColor = '#000000';
+        let pendingPoints = [];
+        let drawingRAF = null;
 
         // Device ID can be configured via URL (e.g., ?deviceId=Tile2) or defaults to Tile1
         //http://tiles.anshagarwal.net:1234/drawer.html?deviceId=Tile2
@@ -337,39 +339,60 @@ let lastSyncTime = 0;
         // Unified Pointer Events
         drawCanvas.addEventListener('pointerdown', (e) => {
             isDrawing = true;
-            lastX = e.offsetX;
-            lastY = e.offsetY;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            drawCanvas.setPointerCapture(e.pointerId);
         });
         
+        function renderStroke() {
+            if (pendingPoints.length === 0) {
+                drawingRAF = null;
+                return;
+            }
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            for (let i = 0; i < pendingPoints.length; i++) {
+                ctx.lineTo(pendingPoints[i].x, pendingPoints[i].y);
+            }
+            ctx.stroke();
+            
+            lastX = pendingPoints[pendingPoints.length - 1].x;
+            lastY = pendingPoints[pendingPoints.length - 1].y;
+            pendingPoints = [];
+            drawingRAF = null;
+        }
+
         drawCanvas.addEventListener('pointermove', (e) => {
             if (!isDrawing) return;
             
-            // 1. Draw to the local screen instantly
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(e.offsetX, e.offsetY);
-            ctx.stroke();
+            const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+            for (let ev of events) {
+                pendingPoints.push({ x: ev.clientX, y: ev.clientY });
+            }
             
-            lastX = e.offsetX;
-            lastY = e.offsetY;
-            
-            // 2. Throttle the expensive toDataURL and Socket operations
-            // const now = Date.now();
-            // if (now - lastSyncTime > SYNC_INTERVAL) {
-            //     const currentImg = drawCanvas.toDataURL();
-            //     myNodes[currentNodeIndex].image = currentImg;
-            //     socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
-            //     lastSyncTime = now;
-            // }
+            if (!drawingRAF) {
+                drawingRAF = requestAnimationFrame(renderStroke);
+            }
         });
 
         // // Ensure a final sync happens exactly when the stroke ends
-        function endDrawing() {
+        function endDrawing(e) {
             if (isDrawing) {
                 isDrawing = false;
+
+                // Finish any pending strokes before capturing the image
+                if (drawingRAF) {
+                    cancelAnimationFrame(drawingRAF);
+                    renderStroke();
+                }
+
                 const currentImg = drawCanvas.toDataURL();
                 myNodes[currentNodeIndex].image = currentImg;
                 socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+                if (e && e.pointerId && drawCanvas.hasPointerCapture && drawCanvas.hasPointerCapture(e.pointerId)) {
+                    drawCanvas.releasePointerCapture(e.pointerId);
+                }
             }
         }
 
