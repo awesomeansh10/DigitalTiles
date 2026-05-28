@@ -163,8 +163,6 @@
         let lastX = 0;
         let lastY = 0;
         let currentColor = '#000000';
-        let pendingPoints = [];
-        let drawingRAF = null;
 
         // Device ID can be configured via URL (e.g., ?deviceId=Tile2) or defaults to Tile1
         //http://tiles.anshagarwal.net:1234/drawer.html?deviceId=Tile2
@@ -333,12 +331,10 @@
 
         // Initialize the first node
         createNewNode();
-// Unified Pointer Events (Handles Mouse, Touch, and Pen simultaneously)
-let lastSyncTime = 0;
-        const SYNC_INTERVAL = 1000; // Sync to network every 150 milliseconds (adjust if needed)
 
         // Unified Pointer Events
         drawCanvas.addEventListener('pointerdown', (e) => {
+            e.preventDefault(); // Prevent default browser touch actions (scrolling/panning)
             if (isDrawing) {
                 if (e.isPrimary) {
                     endDrawing({ pointerId: activePointerId });
@@ -351,53 +347,38 @@ let lastSyncTime = 0;
             activePointerId = e.pointerId;
             lastX = e.clientX;
             lastY = e.clientY;
-            pendingPoints = [];
-            drawCanvas.setPointerCapture(e.pointerId);
-        });
-        
-        function renderStroke() {
-            if (pendingPoints.length === 0) {
-                drawingRAF = null;
-                return;
-            }
             
+            try {
+                drawCanvas.setPointerCapture(e.pointerId);
+            } catch (err) {}
+            
+            // Draw a single dot in case of a tap
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
-            for (let i = 0; i < pendingPoints.length; i++) {
-                ctx.lineTo(pendingPoints[i].x, pendingPoints[i].y);
-            }
+            ctx.lineTo(lastX, lastY);
             ctx.stroke();
-            
-            lastX = pendingPoints[pendingPoints.length - 1].x;
-            lastY = pendingPoints[pendingPoints.length - 1].y;
-            pendingPoints = [];
-            drawingRAF = null;
-        }
+        });
 
         drawCanvas.addEventListener('pointermove', (e) => {
+            e.preventDefault(); // Ensure swipe gestures don't cancel the drawing
             if (!isDrawing || e.pointerId !== activePointerId) return;
             
             const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
             for (let ev of events) {
-                pendingPoints.push({ x: ev.clientX, y: ev.clientY });
+                ctx.lineTo(ev.clientX, ev.clientY);
+                lastX = ev.clientX;
+                lastY = ev.clientY;
             }
-            
-            if (!drawingRAF) {
-                drawingRAF = requestAnimationFrame(renderStroke);
-            }
+            ctx.stroke();
         });
 
-        // // Ensure a final sync happens exactly when the stroke ends
+        // Ensure a final sync happens exactly when the stroke ends
         function endDrawing(e) {
             if (isDrawing && e.pointerId === activePointerId) {
                 isDrawing = false;
                 activePointerId = null;
-
-                // Finish any pending strokes before capturing the image
-                if (drawingRAF) {
-                    cancelAnimationFrame(drawingRAF);
-                    renderStroke();
-                }
 
                 const currentImg = drawCanvas.toDataURL();
                 myNodes[currentNodeIndex].image = currentImg;
