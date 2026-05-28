@@ -363,15 +363,15 @@ let lastSyncTime = 0;
             }
         });
 
-        // Ensure a final sync happens exactly when the stroke ends
-        function endDrawing() {
-            if (isDrawing) {
-                isDrawing = false;
-                const currentImg = drawCanvas.toDataURL();
-                myNodes[currentNodeIndex].image = currentImg;
-                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
-            }
-        }
+        // // Ensure a final sync happens exactly when the stroke ends
+        // function endDrawing() {
+        //     if (isDrawing) {
+        //         isDrawing = false;
+        //         const currentImg = drawCanvas.toDataURL();
+        //         myNodes[currentNodeIndex].image = currentImg;
+        //         socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+        //     }
+        // }
 
         drawCanvas.addEventListener('pointerup', endDrawing);
         drawCanvas.addEventListener('pointerout', endDrawing);

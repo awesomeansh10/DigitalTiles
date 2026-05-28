@@ -83,10 +83,9 @@ if __name__ == '__main__':
     try:
         # 4. Connect once at the start of the script
         ensure_connection()
-        time.sleep(4)
-        toggle_menu()
-        time.sleep(4)
-        toggle_menu()
+        for i in range(10):
+            input("Press Enter to toggle the menu...")
+            toggle_menu()
 
 
         # # 5. Call functions to send commands over the open connection
