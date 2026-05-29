@@ -243,14 +243,10 @@
         let currentNodeIndex = -1;
 
         // Aggressive global touch interceptor to override WebKitGTK gesture delays
-        const preventGestures = (e) => {
-            if (e.target.tagName !== 'INPUT' && e.cancelable) e.preventDefault();
-        };
-        window.addEventListener('touchstart', preventGestures, { passive: false, capture: true });
-        window.addEventListener('touchmove', preventGestures, { passive: false, capture: true });
-        window.addEventListener('contextmenu', preventGestures, { passive: false, capture: true });
-        window.addEventListener('dragstart', preventGestures, { passive: false, capture: true });
-
+        // Safely block the context menu without destroying pointer events
+        window.addEventListener('contextmenu', (e) => {
+            if (e.target.tagName !== 'INPUT') e.preventDefault();
+        });
         socket.on('toggle_menu', (data) => {
             if (data.deviceId === DEVICE_ID) {
                 const overlay = document.querySelector('.controls-overlay');
@@ -487,12 +483,12 @@
 
         const eventOpts = { passive: false };
 
-        // Use ONLY Pointer Events (Handles Touch, Mouse, and Pen automatically)
+        // Use ONLY Pointer Events for the Canvas
         drawCanvas.addEventListener('pointerdown', handleStart, eventOpts);
         drawCanvas.addEventListener('pointermove', handleMove, eventOpts);
         drawCanvas.addEventListener('pointerup', endDrawing, eventOpts);
         drawCanvas.addEventListener('pointercancel', endDrawing, eventOpts);
-
+        drawCanvas.addEventListener('pointerout', endDrawing, eventOpts);
 
         bindTap(document.getElementById('connect-btn'), () => {
             const rawInput = document.getElementById('target-id').value;
