@@ -1,25 +1,30 @@
 from gpiozero import Button
 from signal import pause
 
-print("--- RAW ENCODER DEBUG MODE ---")
-print("We are reading the raw signals from the pins to see if one is broken.")
+print("--- CUSTOM ENCODER LOGIC ---")
+print("Your output shows the encoder is mechanically skipping a state (1 0).")
+print("gpiozero's built-in RotaryEncoder strictly requires all 4 states and rejects skipped ones.")
+print("This custom logic fixes it by using a forgiving 'Clock and Data' approach.")
 
-# Treat both encoder pins as standard buttons to see exactly what they are doing
-pin_A = Button(17, pull_up=True)
-pin_B = Button(27, pull_up=True)
+# Initialize pins as standard buttons with a small software debounce
+clk = Button(17, pull_up=True, bounce_time=0.005)
+dt = Button(27, pull_up=True, bounce_time=0.005)
 
-def print_pin_states():
-    # .value is 1 when connected to GND (active) and 0 when open (pull-up/inactive)
-    print(f"Pin 17: {pin_A.value} | Pin 27: {pin_B.value}")
+steps = 0
 
-# Trigger the print whenever either pin changes state
-pin_A.when_pressed = print_pin_states
-pin_A.when_released = print_pin_states
-pin_B.when_pressed = print_pin_states
-pin_B.when_released = print_pin_states
+def on_dt_pressed():
+    global steps
+    # When DT (Pin 27) goes active (to GND), we check the state of CLK (Pin 17)
+    if clk.is_active:
+        steps -= 1
+        print(f"Rotated Anti-clockwise! Current steps: {steps}")
+    else:
+        steps += 1
+        print(f"Rotated Clockwise! Current steps: {steps}")
 
-print("Slowly turn the encoder ONE click in either direction.")
-print("You should see BOTH pins alternating between 0 and 1. Press Ctrl+C to exit.")
+dt.when_pressed = on_dt_pressed
+
+print("\nTurn the encoder. Both directions should now work! Press Ctrl+C to exit.")
 
 # Keep the script running to listen for events
 pause()
