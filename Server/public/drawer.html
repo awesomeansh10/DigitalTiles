@@ -5,16 +5,17 @@
     <style>
         body, html { 
             margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; background: #fff; 
-            touch-action: none; /* Prevent browser handling of gestures */
-            -webkit-touch-callout: none; /* Disable tap-to-hold context menu */
-            -webkit-user-select: none; /* Disable text selection */
-            user-select: none;
             overscroll-behavior: none; /* Stop bounce/pan */
         }
+        * {
+            touch-action: none; /* Aggressive block on all elements */
+            -webkit-touch-callout: none; 
+            -webkit-user-select: none; 
+            user-select: none;
+            -webkit-user-drag: none;
+        }
         canvas { 
-            display: block; cursor: crosshair; touch-action: none; 
-            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
-            -webkit-user-drag: none; /* Stop image/canvas drag */
+            display: block; cursor: crosshair; 
         }
         
         .controls-overlay {
@@ -133,7 +134,7 @@
 </head>
 <body>
     
-    <canvas id="drawCanvas"></canvas>
+    <canvas id="drawCanvas" draggable="false"></canvas>
 
 
     <div class="debug-overlay" id="debug-menu">
@@ -172,7 +173,6 @@
         const colorSquares = document.querySelectorAll('.color-square');
         
         let isDrawing = false;
-        let activePointerId = null;
         let lastX = 0;
         let lastY = 0;
         let currentColor = '#000000';
@@ -196,6 +196,7 @@
         window.addEventListener('touchstart', preventGestures, { passive: false, capture: true });
         window.addEventListener('touchmove', preventGestures, { passive: false, capture: true });
         window.addEventListener('contextmenu', preventGestures, { passive: false, capture: true });
+        window.addEventListener('dragstart', preventGestures, { passive: false, capture: true });
 
         socket.on('toggle_menu', (data) => {
             if (data.deviceId === DEVICE_ID) {
@@ -363,30 +364,24 @@
         createNewNode();
 
         // Unified Touch and Pointer Events (for maximum compatibility with Surf / WebKitGTK)
-        let usingTouch = false;
 
         function getCoords(e) {
-            if (e.changedTouches && e.changedTouches.length > 0) {
-                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY, id: e.changedTouches[0].identifier };
+            if (e.targetTouches && e.targetTouches.length > 0) {
+                return { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
+            } else if (e.changedTouches && e.changedTouches.length > 0) {
+                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
             }
-            return { x: e.clientX, y: e.clientY, id: e.pointerId !== undefined ? e.pointerId : 'mouse' };
+            return { x: e.clientX, y: e.clientY };
         }
 
         function handleStart(e) {
+            if (e.touches && e.touches.length > 1) return; // Prevent multi-touch glitches
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
-            if (e.type.startsWith('touch')) usingTouch = true;
-            if (!e.type.startsWith('touch') && usingTouch) return; // ignore duplicate mouse/pointer events
 
             const coords = getCoords(e);
 
-            if (isDrawing) {
-                if (!e.type.startsWith('touch') && e.isPrimary) endDrawing({ pointerId: activePointerId });
-                else return; // Ignore secondary touches
-            }
-            
             isDrawing = true;
-            activePointerId = coords.id;
             lastX = coords.x;
             lastY = coords.y;
             
@@ -404,40 +399,20 @@
         }
 
         function handleMove(e) {
+            if (e.touches && e.touches.length > 1) return; // Prevent multi-touch glitches
             if (e.cancelable) e.preventDefault();
             e.stopPropagation();
             if (!isDrawing) return;
 
-            if (e.type.startsWith('touch')) {
-                let activeTouch = null;
-                for (let i = 0; i < e.changedTouches.length; i++) {
-                    if (e.changedTouches[i].identifier === activePointerId) {
-                        activeTouch = e.changedTouches[i];
-                        break;
-                    }
-                }
-                if (!activeTouch) return;
-                
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                ctx.lineTo(activeTouch.clientX, activeTouch.clientY);
-                ctx.stroke();
-                lastX = activeTouch.clientX;
-                lastY = activeTouch.clientY;
-            } else {
-                const currentId = e.pointerId !== undefined ? e.pointerId : 'mouse';
-                if (currentId !== activePointerId) return;
-                
-                const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-                ctx.beginPath();
-                ctx.moveTo(lastX, lastY);
-                for (let ev of events) {
-                    ctx.lineTo(ev.clientX, ev.clientY);
-                    lastX = ev.clientX;
-                    lastY = ev.clientY;
-                }
-                ctx.stroke();
-            }
+            const coords = getCoords(e);
+            
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(coords.x, coords.y);
+            ctx.stroke();
+            
+            lastX = coords.x;
+            lastY = coords.y;
         }
 
         function endDrawing(e) {
@@ -445,11 +420,7 @@
             if (e) e.stopPropagation();
             if (!isDrawing) return;
 
-            const coords = getCoords(e);
-            if (coords.id !== activePointerId) return;
-
             isDrawing = false;
-            activePointerId = null;
 
             const currentImg = drawCanvas.toDataURL();
             myNodes[currentNodeIndex].image = currentImg;
