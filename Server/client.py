@@ -229,7 +229,7 @@ if __name__ == '__main__':
             elif not menubutton.is_pressed:
                 menubutton_was_pressed = False
             
-            time.sleep(0.1)  # Small delay to prevent high CPU usage
+            time.sleep(0.3)  # Small delay to prevent high CPU usage
 
             
 
