@@ -435,6 +435,11 @@
                 const selectedColor = e.target.getAttribute('data-color');
                 currentColor = selectedColor;
                 ctx.strokeStyle = currentColor; // Change brush color
+                if(currentColor === '#ffffff') {
+                    ctx.lineWidth = 20; // Thicker line for eraser
+                } else {
+                    ctx.lineWidth = 4; // Default line width for drawing
+                }
             });
         });
 
