@@ -3,7 +3,7 @@ from signal import pause
 
 # Initialize the rotary encoder on GPIO pins 4 and 17
 # gpiozero enables internal pull-ups for the RotaryEncoder by default
-encoder = RotaryEncoder(4, 17)
+encoder = RotaryEncoder(17, 27)
 
 # Initialize the button on GPIO pin 0
 # pull_up=True enables the internal pull-up resistor (this is also the default)

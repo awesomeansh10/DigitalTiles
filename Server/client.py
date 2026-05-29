@@ -130,7 +130,7 @@ if __name__ == '__main__':
 
         # Initialize the rotary encoder (assuming GPIO pins 17 and 18)
         # Note: You'll need to run this on a Raspberry Pi with the gpiozero library installed.
-        encoder = RotaryEncoder(4, 17)
+        encoder = RotaryEncoder(17, 27)
 
         # Initialize the button (assuming GPIO pin 27)
         button1 = Button(27, pull_up=True)
