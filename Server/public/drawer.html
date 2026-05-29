@@ -69,7 +69,7 @@
             border: 3px solid #fff;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
             cursor: pointer;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s, border-color 0.2s;
+            transition: transform 0.15s ease-out, opacity 0.15s ease-out, border-color 0.15s ease-out;
             box-sizing: border-box;
             opacity: 0;
             transform: translateY(30px) scale(0.5);
@@ -201,7 +201,7 @@
             pointer-events: none;
             opacity: 0;
             transform: translateY(20px);
-            transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
             border: 1px solid #334155;
         }
 
@@ -289,7 +289,14 @@
         function showNodePopup(nodeId) {
             const popup = document.getElementById('node-popup');
             const popupNodeId = document.getElementById('popup-node-id');
-            popupNodeId.innerText = nodeId;
+            
+            // Extract just the node number (e.g., Tile1_node_3 -> 3)
+            const nodeNumber = nodeId.split('_').pop();
+            popupNodeId.innerText = nodeNumber;
+            
+            // Remove the class and force a reflow to restart the animation instantly
+            popup.classList.remove('show');
+            void popup.offsetWidth; 
             popup.classList.add('show');
             
             if (popupTimeout) {
