@@ -1,23 +1,36 @@
 <!DOCTYPE html>
 <html>
+
 <head>
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>Draw Node</title>
     <style>
-        body, html { 
-            margin: 0; padding: 0; overflow: hidden; font-family: sans-serif; background: #fff; 
-            overscroll-behavior: none; /* Stop bounce/pan */
+        body,
+        html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: sans-serif;
+            background: #fff;
+            overscroll-behavior: none;
+            /* Stop bounce/pan */
         }
+
         * {
-            touch-action: none; /* Aggressive block on all elements */
-            -webkit-touch-callout: none; 
-            -webkit-user-select: none; 
+            touch-action: none;
+            /* Aggressive block on all elements */
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
             user-select: none;
             -webkit-user-drag: none;
         }
-        canvas { 
-            display: block; cursor: crosshair; 
+
+        canvas {
+            display: block;
+            cursor: crosshair;
         }
-        
+
         .controls-overlay {
             position: fixed;
             bottom: 30px;
@@ -29,8 +42,17 @@
             pointer-events: none;
         }
 
-        .header-info { margin: 0; font-family: monospace; font-size: 16px; font-weight: bold; color: #333; display: flex; align-items: center; gap: 15px;}
-        
+        .header-info {
+            margin: 0;
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
         /* Layout for the color presets */
         .preset-container {
             display: flex;
@@ -44,7 +66,7 @@
             height: 32px;
             border-radius: 50%;
             border: 3px solid #fff;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
             cursor: pointer;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.2s, border-color 0.2s;
             box-sizing: border-box;
@@ -65,39 +87,69 @@
         }
 
         /* Staggered animation */
-        .color-square:nth-child(1) { transition-delay: 0.00s; }
-        .color-square:nth-child(2) { transition-delay: 0.03s; }
-        .color-square:nth-child(3) { transition-delay: 0.06s; }
-        .color-square:nth-child(4) { transition-delay: 0.09s; }
-        .color-square:nth-child(5) { transition-delay: 0.12s; }
-        .color-square:nth-child(6) { transition-delay: 0.15s; }
-        .color-square:nth-child(7) { transition-delay: 0.18s; }
-        .color-square:nth-child(8) { transition-delay: 0.21s; }
+        .color-square:nth-child(1) {
+            transition-delay: 0.00s;
+        }
 
-        .action-row { display: flex; gap: 10px; align-items: center; }
-        
-        input[type="text"] { 
-            -webkit-user-select: auto; /* Re-enable for inputs */
+        .color-square:nth-child(2) {
+            transition-delay: 0.03s;
+        }
+
+        .color-square:nth-child(3) {
+            transition-delay: 0.06s;
+        }
+
+        .color-square:nth-child(4) {
+            transition-delay: 0.09s;
+        }
+
+        .color-square:nth-child(5) {
+            transition-delay: 0.12s;
+        }
+
+        .color-square:nth-child(6) {
+            transition-delay: 0.15s;
+        }
+
+        .color-square:nth-child(7) {
+            transition-delay: 0.18s;
+        }
+
+        .color-square:nth-child(8) {
+            transition-delay: 0.21s;
+        }
+
+        .action-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        input[type="text"] {
+            -webkit-user-select: auto;
+            /* Re-enable for inputs */
             user-select: auto;
-            padding: 10px; 
-            border: 1px solid #ccc; 
-            border-radius: 6px; 
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
             width: 250px;
             font-family: monospace;
         }
 
-        .btn { 
-            padding: 10px 20px; 
-            background: #007bff; 
-            color: white; 
-            border: none; 
-            border-radius: 6px; 
-            cursor: pointer; 
+        .btn {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
             font-weight: bold;
             transition: background 0.2s;
         }
-        
-        .btn:hover { background: #0056b3; }
+
+        .btn:hover {
+            background: #0056b3;
+        }
 
         /* Debug Menu Styling */
         .debug-overlay {
@@ -107,7 +159,7 @@
             background: rgba(240, 240, 240, 0.95);
             padding: 15px 25px;
             border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
             display: none;
             flex-direction: column;
             gap: 12px;
@@ -132,8 +184,9 @@
         }
     </style>
 </head>
+
 <body>
-    
+
     <canvas id="drawCanvas" draggable="false"></canvas>
 
 
@@ -150,7 +203,7 @@
             <button id="switch-node-btn" class="btn" style="background-color: #8b5cf6;">Switch Node</button>
         </div>
     </div>
-    
+
     <div class="controls-overlay open">
         <!-- Preset Color Squares -->
         <div class="preset-container">
@@ -171,7 +224,7 @@
         const drawCanvas = document.getElementById('drawCanvas');
         const ctx = drawCanvas.getContext('2d');
         const colorSquares = document.querySelectorAll('.color-square');
-        
+
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
@@ -180,8 +233,8 @@
         // Device ID can be configured via URL (e.g., ?deviceId=Tile2) or defaults to Tile1
         //http://tiles.anshagarwal.net:1234/drawer.html?deviceId=Tile2
         const urlParams = new URLSearchParams(window.location.search);
-        const DEVICE_ID = urlParams.get('deviceId') || "Tile1"; 
-        
+        const DEVICE_ID = urlParams.get('deviceId') || "Tile1";
+
         // Node numbers go up sequentially starting from 1
         let nodeCounter = 1;
 
@@ -221,19 +274,19 @@
                     // Switch to existing node
                     if (currentNodeIndex !== foundIndex) {
                         myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
-                        
+
                         currentNodeIndex = foundIndex;
                         const activeNode = myNodes[currentNodeIndex];
-                        
+
                         document.getElementById('my-id').innerText = activeNode.id;
-                        
+
                         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
                         if (activeNode.image && activeNode.image !== 'data:,') {
                             const img = new Image();
                             img.onload = () => ctx.drawImage(img, 0, 0);
                             img.src = activeNode.image;
                         }
-                        
+
                         ctx.strokeStyle = currentColor;
                         ctx.lineCap = 'round';
                         ctx.lineJoin = 'round';
@@ -244,7 +297,7 @@
                     if (currentNodeIndex >= 0) {
                         myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
                     }
-                    
+
                     const newNode = {
                         id: targetNodeId,
                         deviceId: DEVICE_ID,
@@ -252,12 +305,12 @@
                     };
                     myNodes.push(newNode);
                     currentNodeIndex = myNodes.length - 1;
-                    
+
                     document.getElementById('my-device-id').innerText = DEVICE_ID;
                     document.getElementById('my-id').innerText = targetNodeId;
-                    
+
                     ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-                    
+
                     socket.emit('add_node', {
                         id: targetNodeId,
                         deviceId: DEVICE_ID,
@@ -265,7 +318,7 @@
                         y: Math.random() * 400 + 100,
                         image: drawCanvas.toDataURL()
                     });
-                    
+
                     if (data.nodeNumber >= nodeCounter) {
                         nodeCounter = data.nodeNumber + 1;
                     }
@@ -282,12 +335,12 @@
             };
             myNodes.push(newNode);
             currentNodeIndex = myNodes.length - 1;
-            
+
             document.getElementById('my-device-id').innerText = DEVICE_ID;
             document.getElementById('my-id').innerText = newNodeId;
-            
+
             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-            
+
             socket.emit('add_node', {
                 id: newNodeId,
                 deviceId: DEVICE_ID,
@@ -299,16 +352,16 @@
 
         function switchNode() {
             if (myNodes.length <= 1) return;
-            
+
             // Save current canvas to current node before switching
             myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
-            
+
             // Cycle index
             currentNodeIndex = (currentNodeIndex + 1) % myNodes.length;
             const activeNode = myNodes[currentNodeIndex];
-            
+
             document.getElementById('my-id').innerText = activeNode.id;
-            
+
             // Load saved image
             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
             if (activeNode.image && activeNode.image !== 'data:,') {
@@ -327,30 +380,29 @@
             const currentImg = drawCanvas.toDataURL();
             drawCanvas.width = window.innerWidth;
             drawCanvas.height = window.innerHeight;
-            
+
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
             ctx.lineWidth = 4;
-            ctx.strokeStyle = currentColor; 
-            
-            if(currentImg !== 'data:,') {
+            ctx.strokeStyle = currentColor;
+
+            if (currentImg !== 'data:,') {
                 const img = new Image();
                 img.onload = () => ctx.drawImage(img, 0, 0);
                 img.src = currentImg;
             }
         }
         window.addEventListener('resize', resizeCanvas);
-        resizeCanvas(); 
+        resizeCanvas();
 
         // Bind Tap helper for UI elements to work on surf/WebKit
+        // Bind Tap helper for UI elements
         function bindTap(element, handler) {
-            element.addEventListener('touchstart', (e) => {
+            element.addEventListener('pointerdown', (e) => {
                 if (e.cancelable) e.preventDefault();
                 handler(e);
-            }, { passive: false });
-            element.addEventListener('mousedown', handler);
+            });
         }
-
         // Update brush from the preset squares
         colorSquares.forEach(square => {
             bindTap(square, (e) => {
@@ -384,13 +436,13 @@
             isDrawing = true;
             lastX = coords.x;
             lastY = coords.y;
-            
+
             try {
                 if (e.pointerId !== undefined && drawCanvas.setPointerCapture) {
                     drawCanvas.setPointerCapture(e.pointerId);
                 }
-            } catch (err) {}
-            
+            } catch (err) { }
+
             // Draw a single dot in case of a tap
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
@@ -405,12 +457,12 @@
             if (!isDrawing) return;
 
             const coords = getCoords(e);
-            
+
             ctx.beginPath();
             ctx.moveTo(lastX, lastY);
             ctx.lineTo(coords.x, coords.y);
             ctx.stroke();
-            
+
             lastX = coords.x;
             lastY = coords.y;
         }
@@ -425,41 +477,32 @@
             const currentImg = drawCanvas.toDataURL();
             myNodes[currentNodeIndex].image = currentImg;
             socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
-            
+
             try {
                 if (e && e.pointerId !== undefined && drawCanvas.hasPointerCapture && drawCanvas.hasPointerCapture(e.pointerId)) {
                     drawCanvas.releasePointerCapture(e.pointerId);
                 }
-            } catch (err) {}
+            } catch (err) { }
         }
 
         const eventOpts = { passive: false };
-        drawCanvas.addEventListener('touchstart', handleStart, eventOpts);
-        drawCanvas.addEventListener('touchmove', handleMove, eventOpts);
-        drawCanvas.addEventListener('touchend', endDrawing, eventOpts);
-        drawCanvas.addEventListener('touchcancel', endDrawing, eventOpts);
 
+        // Use ONLY Pointer Events (Handles Touch, Mouse, and Pen automatically)
         drawCanvas.addEventListener('pointerdown', handleStart, eventOpts);
         drawCanvas.addEventListener('pointermove', handleMove, eventOpts);
         drawCanvas.addEventListener('pointerup', endDrawing, eventOpts);
         drawCanvas.addEventListener('pointercancel', endDrawing, eventOpts);
-        // Fallback standard mouse events for certain Linux touch drivers
-        drawCanvas.addEventListener('mousedown', handleStart, eventOpts);
-        drawCanvas.addEventListener('mousemove', handleMove, eventOpts);
-        drawCanvas.addEventListener('mouseup', endDrawing, eventOpts);
-        drawCanvas.addEventListener('mouseleave', endDrawing, eventOpts);
-
 
 
         bindTap(document.getElementById('connect-btn'), () => {
             const rawInput = document.getElementById('target-id').value;
-            if(rawInput && currentNodeIndex >= 0) {
+            if (rawInput && currentNodeIndex >= 0) {
                 const myNodeId = myNodes[currentNodeIndex].id;
                 const targets = rawInput.split(',').map(id => id.trim()).filter(id => id !== '');
                 targets.forEach(targetId => {
                     socket.emit('add_edge', { source: myNodeId, target: targetId });
                 });
-                document.getElementById('target-id').value = ''; 
+                document.getElementById('target-id').value = '';
             }
         });
 
@@ -475,4 +518,5 @@
 
     </script>
 </body>
+
 </html>
