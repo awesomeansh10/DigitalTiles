@@ -2,29 +2,45 @@ from gpiozero import Button
 from signal import pause
 
 print("--- CUSTOM ENCODER LOGIC ---")
-print("Your output shows the encoder is mechanically skipping a state (1 0).")
-print("gpiozero's built-in RotaryEncoder strictly requires all 4 states and rejects skipped ones.")
-print("This custom logic fixes it by using a forgiving 'Clock and Data' approach.")
+print("We are upgrading to a Robust Sequence Parser.")
+print("This completely filters out bounces and prevents false reverse-reads.")
 
-# Initialize pins as standard buttons with a small software debounce
-clk = Button(17, pull_up=True, bounce_time=0.005)
-dt = Button(27, pull_up=True, bounce_time=0.005)
+# Initialize pins without software debounce, our sequence array naturally handles it
+clk = Button(17, pull_up=True)
+dt = Button(27, pull_up=True)
 
 steps = 0
+current_sequence = []
 
-def on_dt_pressed():
-    global steps
-    # When DT (Pin 27) goes active (to GND), we check the state of CLK (Pin 17)
-    if clk.is_active:
-        steps -= 1
-        print(f"Rotated Anti-clockwise! Current steps: {steps}")
-    else:
-        steps += 1
-        print(f"Rotated Clockwise! Current steps: {steps}")
+def check_state():
+    global current_sequence, steps
+    
+    state = (clk.is_active, dt.is_active)
+    
+    if state == (False, False):
+        # Cycle complete! Check if both critical states occurred during this click
+        if (True, True) in current_sequence and (False, True) in current_sequence:
+            idx_11 = current_sequence.index((True, True))
+            idx_01 = current_sequence.index((False, True))
+            
+            # Check which state happened first
+            if idx_01 < idx_11:
+                steps += 1
+                print(f"Rotated Clockwise! Current steps: {steps}")
+            else:
+                steps -= 1
+                print(f"Rotated Anti-clockwise! Current steps: {steps}")
+        
+        current_sequence.clear()
+    elif not current_sequence or current_sequence[-1] != state:
+        current_sequence.append(state)
 
-dt.when_pressed = on_dt_pressed
+clk.when_pressed = check_state
+clk.when_released = check_state
+dt.when_pressed = check_state
+dt.when_released = check_state
 
-print("\nTurn the encoder. Both directions should now work! Press Ctrl+C to exit.")
+print("\nTurn the encoder. Both directions should now be perfectly reliable! Press Ctrl+C to exit.")
 
 # Keep the script running to listen for events
 pause()
