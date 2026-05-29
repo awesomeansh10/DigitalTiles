@@ -9,10 +9,12 @@
             -webkit-touch-callout: none; /* Disable tap-to-hold context menu */
             -webkit-user-select: none; /* Disable text selection */
             user-select: none;
+            overscroll-behavior: none; /* Stop bounce/pan */
         }
         canvas { 
             display: block; cursor: crosshair; touch-action: none; 
             -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
+            -webkit-user-drag: none; /* Stop image/canvas drag */
         }
         
         .controls-overlay {
@@ -186,6 +188,14 @@
         // Store multiple nodes for this device
         let myNodes = [];
         let currentNodeIndex = -1;
+
+        // Aggressive global touch interceptor to override WebKitGTK gesture delays
+        const preventGestures = (e) => {
+            if (e.target.tagName !== 'INPUT' && e.cancelable) e.preventDefault();
+        };
+        window.addEventListener('touchstart', preventGestures, { passive: false, capture: true });
+        window.addEventListener('touchmove', preventGestures, { passive: false, capture: true });
+        window.addEventListener('contextmenu', preventGestures, { passive: false, capture: true });
 
         socket.on('toggle_menu', (data) => {
             if (data.deviceId === DEVICE_ID) {
@@ -462,6 +472,11 @@
         drawCanvas.addEventListener('pointermove', handleMove, eventOpts);
         drawCanvas.addEventListener('pointerup', endDrawing, eventOpts);
         drawCanvas.addEventListener('pointercancel', endDrawing, eventOpts);
+        // Fallback standard mouse events for certain Linux touch drivers
+        drawCanvas.addEventListener('mousedown', handleStart, eventOpts);
+        drawCanvas.addEventListener('mousemove', handleMove, eventOpts);
+        drawCanvas.addEventListener('mouseup', endDrawing, eventOpts);
+        drawCanvas.addEventListener('mouseleave', endDrawing, eventOpts);
 
 
 
