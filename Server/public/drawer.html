@@ -393,13 +393,15 @@
 
         // Bind Tap helper for UI elements to work on surf/WebKit
         // Bind Tap helper for UI elements
-        function bindTap(element, handler) {
-            element.addEventListener('pointerdown', (e) => {
-                if (e.cancelable) e.preventDefault();
-                handler(e);
-            });
-        }
-        // Update brush from the preset squares
+function bindTap(element, handler) {
+    element.addEventListener('touchstart', (e) => {
+        if (e.cancelable) e.preventDefault();
+        handler(e);
+    }, { passive: false });
+    
+    // Fallback for physical mouse clicks
+    element.addEventListener('mousedown', handler);
+}        // Update brush from the preset squares
         colorSquares.forEach(square => {
             bindTap(square, (e) => {
                 const selectedColor = e.target.getAttribute('data-color');
@@ -413,83 +415,69 @@
 
         // Unified Touch and Pointer Events (for maximum compatibility with Surf / WebKitGTK)
 
-        function getCoords(e) {
-            if (e.targetTouches && e.targetTouches.length > 0) {
-                return { x: e.targetTouches[0].clientX, y: e.targetTouches[0].clientY };
-            } else if (e.changedTouches && e.changedTouches.length > 0) {
-                return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
-            }
-            return { x: e.clientX, y: e.clientY };
-        }
+function getCoords(e) {
+    // Check for raw touch events first
+    if (e.touches && e.touches.length > 0) {
+        return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    // Fallback for mouse emulation
+    return { x: e.clientX, y: e.clientY };
+}
 
-        function handleStart(e) {
-            if (e.touches && e.touches.length > 1) return; // Prevent multi-touch glitches
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
+function handleStart(e) {
+    // THIS is the critical line. It instantly stops WebKit from trying to pan/zoom/scroll.
+    if (e.cancelable) e.preventDefault(); 
+    
+    isDrawing = true;
+    const coords = getCoords(e);
+    lastX = coords.x;
+    lastY = coords.y;
+    
+    ctx.beginPath();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(lastX, lastY);
+    ctx.stroke();
+}
 
-            const coords = getCoords(e);
+function handleMove(e) {
+    if (!isDrawing) return;
+    if (e.cancelable) e.preventDefault(); // Continue blocking scroll
+    
+    const coords = getCoords(e);
+    
+    ctx.beginPath();
+    ctx.moveTo(lastX, lastY);
+    ctx.lineTo(coords.x, coords.y);
+    ctx.stroke();
+    
+    lastX = coords.x;
+    lastY = coords.y;
+}
 
-            isDrawing = true;
-            lastX = coords.x;
-            lastY = coords.y;
+function endDrawing(e) {
+    if (e && e.cancelable) e.preventDefault();
+    if (!isDrawing) return;
+    isDrawing = false;
 
-            try {
-                if (e.pointerId !== undefined && drawCanvas.setPointerCapture) {
-                    drawCanvas.setPointerCapture(e.pointerId);
-                }
-            } catch (err) { }
+    const currentImg = drawCanvas.toDataURL();
+    myNodes[currentNodeIndex].image = currentImg;
+    socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+}
+const eventOpts = { passive: false };
 
-            // Draw a single dot in case of a tap
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(lastX, lastY);
-            ctx.stroke();
-        }
+// 1. Raw Touch Events (The primary driver for your touchscreen)
+drawCanvas.addEventListener('touchstart', handleStart, eventOpts);
+drawCanvas.addEventListener('touchmove', handleMove, eventOpts);
+drawCanvas.addEventListener('touchend', endDrawing, eventOpts);
+drawCanvas.addEventListener('touchcancel', endDrawing, eventOpts);
 
-        function handleMove(e) {
-            if (e.touches && e.touches.length > 1) return; // Prevent multi-touch glitches
-            if (e.cancelable) e.preventDefault();
-            e.stopPropagation();
-            if (!isDrawing) return;
-
-            const coords = getCoords(e);
-
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
-            ctx.lineTo(coords.x, coords.y);
-            ctx.stroke();
-
-            lastX = coords.x;
-            lastY = coords.y;
-        }
-
-        function endDrawing(e) {
-            if (e && e.cancelable) e.preventDefault();
-            if (e) e.stopPropagation();
-            if (!isDrawing) return;
-
-            isDrawing = false;
-
-            const currentImg = drawCanvas.toDataURL();
-            myNodes[currentNodeIndex].image = currentImg;
-            socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
-
-            try {
-                if (e && e.pointerId !== undefined && drawCanvas.hasPointerCapture && drawCanvas.hasPointerCapture(e.pointerId)) {
-                    drawCanvas.releasePointerCapture(e.pointerId);
-                }
-            } catch (err) { }
-        }
-
-        const eventOpts = { passive: false };
-
-        // Use ONLY Pointer Events for the Canvas
-        drawCanvas.addEventListener('pointerdown', handleStart, eventOpts);
-        drawCanvas.addEventListener('pointermove', handleMove, eventOpts);
-        drawCanvas.addEventListener('pointerup', endDrawing, eventOpts);
-        drawCanvas.addEventListener('pointercancel', endDrawing, eventOpts);
-        drawCanvas.addEventListener('pointerout', endDrawing, eventOpts);
-
+// 2. Mouse Events (Included purely as a fallback in case the Linux touch driver acts as a mouse)
+drawCanvas.addEventListener('mousedown', handleStart, eventOpts);
+drawCanvas.addEventListener('mousemove', handleMove, eventOpts);
+drawCanvas.addEventListener('mouseup', endDrawing, eventOpts);
+drawCanvas.addEventListener('mouseleave', endDrawing, eventOpts);
         bindTap(document.getElementById('connect-btn'), () => {
             const rawInput = document.getElementById('target-id').value;
             if (rawInput && currentNodeIndex >= 0) {
