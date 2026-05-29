@@ -90,15 +90,39 @@ def toggle_menu():
     sio.emit('toggle_menu', {'deviceId': device_id})
 
 
-def encoded():
-    current_steps = encoder.steps
-        # You can apply a modulo if you have a fixed number of nodes (e.g., current_steps % 4)
-    if current_steps < 0:
-        activenode = 1
-    else:
-        activenode = current_steps
+def check_state():
+    global current_sequence, steps
+    
+    state = (clk.is_active, dt.is_active)
+    
+    if state == (False, False):
+        # Cycle complete! Check if both critical states occurred during this click
+        if (True, True) in current_sequence and (False, True) in current_sequence:
+            idx_11 = current_sequence.index((True, True))
+            idx_01 = current_sequence.index((False, True))
+            
+            # Check which state happened first
+            if idx_01 < idx_11:
+                steps += 1
+                print(f"Rotated Clockwise! Current steps: {steps}")
+            else:
+                steps -= 1
+                print(f"Rotated Anti-clockwise! Current steps: {steps}")
+            
+            if steps <= 0:
+                activenode = abs(steps)
+                if activenode == 0:
+                    activenode = 1
+            else:
+                activenode = steps
 
-    switch_active_node(node_number=activenode)
+            switch_active_node(node_number=activenode)
+
+        current_sequence.clear()
+    elif not current_sequence or current_sequence[-1] != state:
+        current_sequence.append(state)
+
+
 
 if __name__ == '__main__':
     try:
@@ -130,7 +154,6 @@ if __name__ == '__main__':
 
         # Initialize the rotary encoder (assuming GPIO pins 17 and 18)
         # Note: You'll need to run this on a Raspberry Pi with the gpiozero library installed.
-        encoder = RotaryEncoder(17, 27)
 
         # Initialize the button (assuming GPIO pin 27)
         button1 = Button(28, pull_up=True)
@@ -139,6 +162,11 @@ if __name__ == '__main__':
         button4 = Button(24, pull_up=True)
         menubutton = Button(0, pull_up=True)
         menubutton_was_pressed = False
+        clk = Button(17, pull_up=True)
+        dt = Button(27, pull_up=True)
+
+        steps = 0
+        current_sequence = []
 
         # Initialize UART communication
         # Note: '/dev/serial0' is the default serial port on Raspberry Pi. 
@@ -167,9 +195,14 @@ if __name__ == '__main__':
         #     connected_tiles[0] = 0
 
 
-        
-        encoder.when_rotated_clockwise = encoded
-        encoder.when_rotated_counter_clockwise = encoded
+
+
+        clk.when_pressed = check_state
+        clk.when_released = check_state
+        dt.when_pressed = check_state
+        dt.when_released = check_state
+
+
         menubutton.when_pressed = toggle_menu
 
         pause()
