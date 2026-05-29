@@ -156,7 +156,7 @@ if __name__ == '__main__':
         # Note: You'll need to run this on a Raspberry Pi with the gpiozero library installed.
 
         # Initialize the button (assuming GPIO pin 27)
-        button1 = Button(28, pull_up=True)
+        button1 = Button(22, pull_up=True)
         button2 = Button(26, pull_up=True)
         button3 = Button(25, pull_up=True)
         button4 = Button(24, pull_up=True)
