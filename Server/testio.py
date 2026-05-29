@@ -4,9 +4,8 @@ from signal import pause
 # Initialize the rotary encoder on GPIO pins 17 and 27
 # 3-pin mouse scroll wheel encoders are raw mechanical components.
 # WIRING: Left Pin -> GPIO 17, Middle Pin -> GND, Right Pin -> GPIO 27.
-# We add a small bounce_time to debounce the mechanical contacts.
 # max_steps=0 ensures the encoder can spin infinitely.
-encoder = RotaryEncoder(17, 27, max_steps=0, bounce_time=0.005)
+encoder = RotaryEncoder(17, 27, max_steps=0)
 
 # Initialize the button on GPIO pin 0
 # pull_up=True enables the internal pull-up resistor (this is also the default)
