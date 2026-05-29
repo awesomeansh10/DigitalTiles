@@ -205,11 +205,19 @@
 
         socket.on('node_updated', (data) => {
             nodesData[data.id].image = data.image;
+            if (data.bgColor) nodesData[data.id].bgColor = data.bgColor;
+            
             const img = document.getElementById('img_' + data.id);
-            if (img) img.src = data.image;
+            if (img) {
+                img.src = data.image;
+                if (data.bgColor) img.style.backgroundColor = data.bgColor;
+            }
             // Also update the fullscreen image live if it's currently open!
             const fsImg = document.getElementById('fullscreen-img');
-            if (fsImg.dataset.activeNode === data.id) fsImg.src = data.image;
+            if (fsImg.dataset.activeNode === data.id) {
+                fsImg.src = data.image;
+                if (data.bgColor) fsImg.style.backgroundColor = data.bgColor;
+            }
         });
 
         socket.on('node_moved', (data) => {
@@ -292,6 +300,7 @@
             img.src = nodeData.image;
             img.id = 'img_' + nodeData.id;
             img.className = 'node-img';
+            img.style.backgroundColor = nodeData.bgColor || 'white';
 
             const label = document.createElement('div');
             label.className = 'node-label';
@@ -340,7 +349,7 @@
 
                     // If they just clicked and released without dragging, trigger fullscreen
                     if (!isDragging) {
-                        openFullscreen(nodeData.id, nodesData[nodeData.id].image);
+                        openFullscreen(nodeData.id, nodesData[nodeData.id].image, nodesData[nodeData.id].bgColor);
                     }
                 };
             };
@@ -353,8 +362,9 @@
         const overlay = document.getElementById('fullscreen-overlay');
         const fsImg = document.getElementById('fullscreen-img');
 
-        function openFullscreen(nodeId, imageSrc) {
+        function openFullscreen(nodeId, imageSrc, bgColor) {
             fsImg.src = imageSrc;
+            fsImg.style.backgroundColor = bgColor || 'white';
             fsImg.dataset.activeNode = nodeId; // Track which node is open for live updates
             overlay.style.display = 'flex';
             // Slight delay before adding the active class triggers the CSS popup animation
@@ -586,7 +596,7 @@
                     ctx.shadowColor = 'rgba(0,0,0,0.15)';
                     ctx.shadowBlur = 15;
                     ctx.shadowOffsetY = 10;
-                    ctx.fillStyle = 'white';
+                    ctx.fillStyle = n.bgColor || 'white';
 
                     ctx.beginPath();
                     ctx.roundRect(drawX, drawY, 150, 150, 16);
@@ -677,7 +687,7 @@
                 const drawX = n.x - minX;
                 const drawY = n.y - minY;
 
-                svgStr += `<rect x="${drawX}" y="${drawY}" width="150" height="150" rx="16" fill="#ffffff" />`;
+                svgStr += `<rect x="${drawX}" y="${drawY}" width="150" height="150" rx="16" fill="${n.bgColor || '#ffffff'}" />`;
 
                 svgStr += `<image href="${n.image}" x="${drawX + 4}" y="${drawY + 4}" width="142" height="142" preserveAspectRatio="none" clip-path="url(#clip-${n.id})" />`;
 

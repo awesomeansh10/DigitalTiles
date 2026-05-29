@@ -126,45 +126,6 @@
             border-color: #e2e8f0;
         }
 
-        /* Staggered animation */
-        .color-square:nth-child(1) {
-            transition-delay: 0.00s;
-        }
-
-        .color-square:nth-child(2) {
-            transition-delay: 0.03s;
-        }
-
-        .color-square:nth-child(3) {
-            transition-delay: 0.06s;
-        }
-
-        .color-square:nth-child(4) {
-            transition-delay: 0.09s;
-        }
-
-        .color-square:nth-child(5) {
-            transition-delay: 0.12s;
-        }
-
-        .color-square:nth-child(6) {
-            transition-delay: 0.15s;
-        }
-
-        .color-square:nth-child(7) {
-            transition-delay: 0.18s;
-        }
-
-        .color-square:nth-child(8) {
-            transition-delay: 0.21s;
-        }
-
-        /* Staggered animation for Background squares */
-        .bg-color-square:nth-child(1) { transition-delay: 0.00s; }
-        .bg-color-square:nth-child(2) { transition-delay: 0.05s; }
-        .bg-color-square:nth-child(3) { transition-delay: 0.10s; }
-        .bg-color-square:nth-child(4) { transition-delay: 0.15s; }
-
         .action-row {
             display: flex;
             gap: 10px;
@@ -245,14 +206,11 @@
             z-index: 1000;
             pointer-events: none;
             opacity: 0;
-            transform: translateY(20px);
-            transition: opacity 0.2s ease-out, transform 0.2s ease-out;
             border: 1px solid #334155;
         }
 
         .node-popup.show {
             opacity: 1;
-            transform: translateY(0);
         }
     </style>
 </head>
@@ -316,6 +274,7 @@
         let currentX = 0, currentY = 0;
         let needsDraw = false;
         let currentColor = '#000000';
+        let currentBgColor = '#ffffff';
 
         // Device ID can be configured via URL (e.g., ?deviceId=Tile2) or defaults to Tile1
         //http://tiles.anshagarwal.net:1234/drawer.html?deviceId=Tile2
@@ -365,7 +324,7 @@
             if (currentNodeIndex >= 0) {
                 const currentImg = drawCanvas.toDataURL();
                 myNodes[currentNodeIndex].image = currentImg;
-                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg, bgColor: currentBgColor });
                 lastUpdateTime = Date.now();
             }
         }
@@ -413,6 +372,9 @@
                             currentNodeIndex = foundIndex;
                             const activeNode = myNodes[currentNodeIndex];
 
+                            currentBgColor = activeNode.bgColor || '#ffffff';
+                            document.body.style.backgroundColor = currentBgColor;
+
                             document.getElementById('my-id').innerText = activeNode.id;
 
                             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
@@ -436,7 +398,8 @@
                         const newNode = {
                             id: targetNodeId,
                             deviceId: DEVICE_ID,
-                            image: 'data:,' // empty image initially
+                            image: 'data:,', // empty image initially
+                            bgColor: currentBgColor
                         };
                         myNodes.push(newNode);
                         currentNodeIndex = myNodes.length - 1;
@@ -451,7 +414,8 @@
                             deviceId: DEVICE_ID,
                             x: Math.random() * 400 + 100,
                             y: Math.random() * 400 + 100,
-                            image: drawCanvas.toDataURL()
+                            image: drawCanvas.toDataURL(),
+                            bgColor: currentBgColor
                         });
 
                         if (data.nodeNumber >= nodeCounter) {
@@ -473,7 +437,8 @@
                 const newNode = {
                     id: newNodeId,
                     deviceId: DEVICE_ID,
-                    image: 'data:,' // empty image initially
+                    image: 'data:,', // empty image initially
+                    bgColor: currentBgColor
                 };
                 myNodes.push(newNode);
                 currentNodeIndex = myNodes.length - 1;
@@ -488,7 +453,8 @@
                     deviceId: DEVICE_ID,
                     x: Math.random() * 400 + 100,
                     y: Math.random() * 400 + 100,
-                    image: drawCanvas.toDataURL()
+                    image: drawCanvas.toDataURL(),
+                    bgColor: currentBgColor
                 });
             }, 15);
         }
@@ -505,6 +471,9 @@
                 forceSync();
                 currentNodeIndex = nextIndex;
                 
+                currentBgColor = activeNode.bgColor || '#ffffff';
+                document.body.style.backgroundColor = currentBgColor;
+
                 document.getElementById('my-id').innerText = activeNode.id;
 
                 ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
@@ -557,7 +526,13 @@
         bgSquares.forEach(square => {
             bindTap(square, (e) => {
                 const selectedBg = e.target.getAttribute('data-bg');
+                currentBgColor = selectedBg;
                 document.body.style.backgroundColor = selectedBg;
+                
+                if (currentNodeIndex >= 0) {
+                    myNodes[currentNodeIndex].bgColor = currentBgColor;
+                    forceSync();
+                }
             });
         });
 
@@ -645,7 +620,7 @@ function endDrawing(e) {
 
     const currentImg = drawCanvas.toDataURL();
     myNodes[currentNodeIndex].image = currentImg;
-    socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+        socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg, bgColor: currentBgColor });
 }
         const eventOpts = { passive: false };
 
