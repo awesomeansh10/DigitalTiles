@@ -522,6 +522,7 @@
         }
         
         // Update background from the preset squares
+        let bgUpdateTimeout = null;
         const bgSquares = document.querySelectorAll('.bg-color-square');
         bgSquares.forEach(square => {
             bindTap(square, (e) => {
@@ -531,7 +532,11 @@
                 
                 if (currentNodeIndex >= 0) {
                     myNodes[currentNodeIndex].bgColor = currentBgColor;
-                    forceSync();
+                    // Yield to the browser so the CSS transition starts before canvas ops freeze the thread
+                    if (bgUpdateTimeout) clearTimeout(bgUpdateTimeout);
+                    bgUpdateTimeout = setTimeout(() => {
+                        forceSync();
+                    }, 15);
                 }
             });
         });
