@@ -243,6 +243,23 @@
         let myNodes = [];
         let currentNodeIndex = -1;
 
+        let lastUpdateTime = 0;
+        let updateTimeout = null;
+        const UPDATE_COOLDOWN = 2000;
+
+        function forceSync() {
+            if (updateTimeout) {
+                clearTimeout(updateTimeout);
+                updateTimeout = null;
+            }
+            if (currentNodeIndex >= 0) {
+                const currentImg = drawCanvas.toDataURL();
+                myNodes[currentNodeIndex].image = currentImg;
+                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+                lastUpdateTime = Date.now();
+            }
+        }
+
         // Aggressive global touch interceptor to override WebKitGTK gesture delays
         // Safely block the context menu without destroying pointer events
         window.addEventListener('contextmenu', (e) => {
@@ -270,7 +287,7 @@
                 if (foundIndex !== -1) {
                     // Switch to existing node
                     if (currentNodeIndex !== foundIndex) {
-                        myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
+                        forceSync();
 
                         currentNodeIndex = foundIndex;
                         const activeNode = myNodes[currentNodeIndex];
@@ -292,7 +309,7 @@
                 } else {
                     // Create new node if it does not exist
                     if (currentNodeIndex >= 0) {
-                        myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
+                        forceSync();
                     }
 
                     const newNode = {
@@ -351,7 +368,7 @@
             if (myNodes.length <= 1) return;
 
             // Save current canvas to current node before switching
-            myNodes[currentNodeIndex].image = drawCanvas.toDataURL();
+            forceSync();
 
             // Cycle index
             currentNodeIndex = (currentNodeIndex + 1) % myNodes.length;
@@ -462,9 +479,12 @@
             if (!isDrawing) return;
             isDrawing = false;
 
-            const currentImg = drawCanvas.toDataURL();
-            myNodes[currentNodeIndex].image = currentImg;
-            socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg });
+            const now = Date.now();
+            if (now - lastUpdateTime >= UPDATE_COOLDOWN) {
+                forceSync();
+            } else if (!updateTimeout) {
+                updateTimeout = setTimeout(forceSync, UPDATE_COOLDOWN - (now - lastUpdateTime));
+            }
         }
         const eventOpts = { passive: false };
 
