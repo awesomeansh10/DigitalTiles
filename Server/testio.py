@@ -1,37 +1,25 @@
-from gpiozero import RotaryEncoder, Button
+from gpiozero import Button
 from signal import pause
 
-# Initialize the rotary encoder on GPIO pins 17 and 27
-# 3-pin mouse scroll wheel encoders are raw mechanical components.
-# WIRING: Left Pin -> GPIO 17, Middle Pin -> GND, Right Pin -> GPIO 27.
-# max_steps=0 ensures the encoder can spin infinitely.
-encoder = RotaryEncoder(17, 27, max_steps=0)
+print("--- RAW ENCODER DEBUG MODE ---")
+print("We are reading the raw signals from the pins to see if one is broken.")
 
-# Initialize the button on GPIO pin 0
-# pull_up=True enables the internal pull-up resistor (this is also the default)
-button = Button(0, pull_up=True, bounce_time=0.01)
+# Treat both encoder pins as standard buttons to see exactly what they are doing
+pin_A = Button(17, pull_up=True)
+pin_B = Button(27, pull_up=True)
 
-def on_clockwise():
-    print(f"Rotated Clockwise! Current steps: {encoder.steps}")
+def print_pin_states():
+    # .value is 1 when connected to GND (active) and 0 when open (pull-up/inactive)
+    print(f"Pin 17: {pin_A.value} | Pin 27: {pin_B.value}")
 
-def on_counter_clockwise():
-    print(f"Rotated Anti-clockwise! Current steps: {encoder.steps}")
+# Trigger the print whenever either pin changes state
+pin_A.when_pressed = print_pin_states
+pin_A.when_released = print_pin_states
+pin_B.when_pressed = print_pin_states
+pin_B.when_released = print_pin_states
 
-def on_button_press():
-    print("Button was pressed!")
-
-def on_button_release():
-    print("Button was released!")
-
-# Assign event handlers
-encoder.when_rotated_clockwise = on_clockwise
-encoder.when_rotated_counter_clockwise = on_counter_clockwise
-button.when_pressed = on_button_press
-button.when_released = on_button_release
-
-print("Running test for Rotary Encoder (Pins 17 & 27) and Button (Pin 0)...")
-print("NOTE: Ensure the middle pin of the 3-pin encoder is wired to GND.")
-print("Turn the encoder or press the button. Press Ctrl+C to exit.")
+print("Slowly turn the encoder ONE click in either direction.")
+print("You should see BOTH pins alternating between 0 and 1. Press Ctrl+C to exit.")
 
 # Keep the script running to listen for events
 pause()
