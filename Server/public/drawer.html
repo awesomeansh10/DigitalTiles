@@ -183,6 +183,32 @@
             font-family: monospace;
             font-weight: bold;
         }
+
+        /* Node Popup Styling */
+        .node-popup {
+            position: fixed;
+            bottom: 30px;
+            left: 30px;
+            background: rgba(15, 23, 42, 0.9);
+            color: #f8fafc;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 16px;
+            font-weight: bold;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid #334155;
+        }
+
+        .node-popup.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
     </style>
 </head>
 
@@ -190,6 +216,7 @@
 
     <canvas id="drawCanvas" draggable="false"></canvas>
 
+    <div id="node-popup" class="node-popup">Node: <span id="popup-node-id"></span></div>
 
     <div class="debug-overlay" id="debug-menu">
         <div class="header-info">
@@ -257,6 +284,22 @@
         let updateTimeout = null;
         const UPDATE_COOLDOWN = 2000;
 
+        let popupTimeout = null;
+        
+        function showNodePopup(nodeId) {
+            const popup = document.getElementById('node-popup');
+            const popupNodeId = document.getElementById('popup-node-id');
+            popupNodeId.innerText = nodeId;
+            popup.classList.add('show');
+            
+            if (popupTimeout) {
+                clearTimeout(popupTimeout);
+            }
+            popupTimeout = setTimeout(() => {
+                popup.classList.remove('show');
+            }, 2000);
+        }
+
         function forceSync() {
             if (updateTimeout) {
                 clearTimeout(updateTimeout);
@@ -303,6 +346,7 @@
                         const activeNode = myNodes[currentNodeIndex];
 
                         document.getElementById('my-id').innerText = activeNode.id;
+                        showNodePopup(activeNode.id);
 
                         ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
                         if (activeNode.image && activeNode.image !== 'data:,') {
@@ -332,6 +376,7 @@
 
                     document.getElementById('my-device-id').innerText = DEVICE_ID;
                     document.getElementById('my-id').innerText = targetNodeId;
+                    showNodePopup(targetNodeId);
 
                     ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
 
@@ -362,6 +407,7 @@
 
             document.getElementById('my-device-id').innerText = DEVICE_ID;
             document.getElementById('my-id').innerText = newNodeId;
+            showNodePopup(newNodeId);
 
             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
 
@@ -385,6 +431,7 @@
             const activeNode = myNodes[currentNodeIndex];
 
             document.getElementById('my-id').innerText = activeNode.id;
+            showNodePopup(activeNode.id);
 
             // Load saved image
             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
