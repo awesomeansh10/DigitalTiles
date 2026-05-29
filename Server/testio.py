@@ -5,12 +5,15 @@ from signal import pause
 # gpiozero enables internal pull-ups for the RotaryEncoder by default
 encoder = RotaryEncoder(4, 17)
 
-# Initialize the button on GPIO pin 26
+# Initialize the button on GPIO pin 0
 # pull_up=True enables the internal pull-up resistor (this is also the default)
-button = Button(26, pull_up=True)
+button = Button(0, pull_up=True)
 
-def on_rotate():
-    print(f"Encoder rotated! Current steps: {encoder.steps}")
+def on_clockwise():
+    print(f"Rotated Clockwise! Current steps: {encoder.steps}")
+
+def on_counter_clockwise():
+    print(f"Rotated Anti-clockwise! Current steps: {encoder.steps}")
 
 def on_button_press():
     print("Button was pressed!")
@@ -19,7 +22,8 @@ def on_button_release():
     print("Button was released!")
 
 # Assign event handlers
-encoder.when_rotated = on_rotate
+encoder.when_rotated_clockwise = on_clockwise
+encoder.when_rotated_counter_clockwise = on_counter_clockwise
 button.when_pressed = on_button_press
 button.when_released = on_button_release
 
