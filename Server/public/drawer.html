@@ -349,6 +349,35 @@
             }
         });
 
+        socket.on('node_updated', (data) => {
+            const foundIndex = myNodes.findIndex(n => n.id === data.id);
+            if (foundIndex !== -1) {
+                myNodes[foundIndex].image = data.image;
+                if (data.bgColor) myNodes[foundIndex].bgColor = data.bgColor;
+
+                if (currentNodeIndex === foundIndex && !isDrawing) {
+                    currentBgColor = myNodes[foundIndex].bgColor || '#ffffff';
+                    document.body.style.backgroundColor = currentBgColor;
+                    
+                    const eraserSquare = document.getElementById('eraser-square');
+                    if (eraserSquare) {
+                        eraserSquare.style.backgroundColor = currentBgColor;
+                    }
+                    if (isEraser) {
+                        currentColor = currentBgColor;
+                        ctx.strokeStyle = currentColor;
+                    }
+
+                    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                    if (data.image && data.image !== 'data:,') {
+                        const img = new Image();
+                        img.onload = () => ctx.drawImage(img, 0, 0);
+                        img.src = data.image;
+                    }
+                }
+            }
+        });
+
         // Listen for custom events broadcasted from the Python script
         socket.on('python_update', (data) => {
             console.log("Received command from Python:", data);

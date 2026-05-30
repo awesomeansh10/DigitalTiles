@@ -143,7 +143,7 @@
             transition: opacity 0.2s ease;
         }
 
-        #fullscreen-img {
+        #fullscreen-canvas {
             background-color: white;
             /* <-- Add this line */
             max-width: 85%;
@@ -154,6 +154,8 @@
             object-fit: contain;
             transform: scale(0.9);
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), background-color 0.3s ease;
+            cursor: crosshair;
+            touch-action: none;
         }
 
         /* Classes added via JS to animate the popup */
@@ -161,7 +163,7 @@
             opacity: 1;
         }
 
-        #fullscreen-overlay.active #fullscreen-img {
+        #fullscreen-overlay.active #fullscreen-canvas {
             transform: scale(1);
         }
     </style>
@@ -174,7 +176,7 @@
 
     <!-- NEW: The Fullscreen Overlay Container -->
     <div id="fullscreen-overlay">
-        <img id="fullscreen-img" src="">
+        <canvas id="fullscreen-canvas"></canvas>
     </div>
 
     <div class="viewer-controls">
@@ -191,6 +193,7 @@
 
         let nodesData = {};
         let edgesData = [];
+        let isDrawing = false; // Add global drawing state
 
         socket.on('init_graph', (state) => {
             nodesData = state.nodes;
@@ -217,12 +220,17 @@
                 if (data.bgColor) img.style.backgroundColor = data.bgColor;
             }
             // Also update the fullscreen image live if it's currently open!
-            const fsImg = document.getElementById('fullscreen-img');
-            if (fsImg.dataset.activeNode === data.id) {
-                if (fsImg.getAttribute('src') !== data.image) {
-                    fsImg.src = data.image;
-                }
-                if (data.bgColor) fsImg.style.backgroundColor = data.bgColor;
+            const fsCanvas = document.getElementById('fullscreen-canvas');
+            if (fsCanvas && fsCanvas.dataset.activeNode === data.id && !isDrawing) {
+                const updatedImg = new Image();
+                updatedImg.onload = () => {
+                    fsCanvas.width = updatedImg.width;
+                    fsCanvas.height = updatedImg.height;
+                    const ctx = fsCanvas.getContext('2d');
+                    ctx.drawImage(updatedImg, 0, 0);
+                };
+                updatedImg.src = data.image;
+                if (data.bgColor) fsCanvas.style.backgroundColor = data.bgColor;
             }
         });
 
@@ -366,24 +374,115 @@
 
         // --- NEW: Fullscreen Open/Close Logic ---
         const overlay = document.getElementById('fullscreen-overlay');
-        const fsImg = document.getElementById('fullscreen-img');
+        const fsCanvas = document.getElementById('fullscreen-canvas');
+        const fsCtx = fsCanvas.getContext('2d', { desynchronized: true });
+        let activeFullscreenNode = '';
+        let lastX = 0, lastY = 0;
 
         function openFullscreen(nodeId, imageSrc, bgColor) {
-            fsImg.src = imageSrc;
-            fsImg.style.backgroundColor = bgColor || 'white';
-            fsImg.dataset.activeNode = nodeId; // Track which node is open for live updates
-            overlay.style.display = 'flex';
-            // Slight delay before adding the active class triggers the CSS popup animation
-            setTimeout(() => overlay.classList.add('active'), 10);
+            activeFullscreenNode = nodeId;
+            fsCanvas.dataset.activeNode = nodeId;
+            fsCanvas.style.backgroundColor = bgColor || 'white';
+            
+            const img = new Image();
+            img.onload = () => {
+                fsCanvas.width = img.width;
+                fsCanvas.height = img.height;
+                fsCtx.drawImage(img, 0, 0);
+                
+                overlay.style.display = 'flex';
+                // Slight delay before adding the active class triggers the CSS popup animation
+                setTimeout(() => overlay.classList.add('active'), 10);
+            };
+            img.src = imageSrc;
         }
 
-        overlay.addEventListener('click', () => {
-            overlay.classList.remove('active');
-            // Wait for the fade-out animation to finish before hiding
-            setTimeout(() => {
-                overlay.style.display = 'none';
-                fsImg.dataset.activeNode = '';
-            }, 200);
+        function getFsCoords(e) {
+            const rect = fsCanvas.getBoundingClientRect();
+            let clientX, clientY;
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            } else {
+                clientX = e.clientX;
+                clientY = e.clientY;
+            }
+            const scaleX = fsCanvas.width / rect.width;
+            const scaleY = fsCanvas.height / rect.height;
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function fsHandleStart(e) {
+            if (e.cancelable) e.preventDefault();
+            const coords = getFsCoords(e);
+            lastX = coords.x;
+            lastY = coords.y;
+            isDrawing = true;
+
+            fsCtx.beginPath();
+            fsCtx.lineCap = 'round';
+            fsCtx.lineJoin = 'round';
+            fsCtx.lineWidth = 4;
+            fsCtx.strokeStyle = '#000000'; // Default black drawing
+            fsCtx.moveTo(lastX, lastY);
+            fsCtx.lineTo(lastX, lastY);
+            fsCtx.stroke();
+        }
+
+        function fsHandleMove(e) {
+            if (!isDrawing) return;
+            if (e.cancelable) e.preventDefault();
+            const coords = getFsCoords(e);
+            
+            fsCtx.beginPath();
+            fsCtx.moveTo(lastX, lastY);
+            fsCtx.lineTo(coords.x, coords.y);
+            fsCtx.stroke();
+            
+            lastX = coords.x;
+            lastY = coords.y;
+        }
+
+        function fsEndDrawing(e) {
+            if (!isDrawing) return;
+            if (e && e.cancelable) e.preventDefault();
+            isDrawing = false;
+            
+            const currentImg = fsCanvas.toDataURL();
+            nodesData[activeFullscreenNode].image = currentImg;
+            socket.emit('update_node', { 
+                id: activeFullscreenNode, 
+                image: currentImg, 
+                bgColor: nodesData[activeFullscreenNode].bgColor 
+            });
+            
+            const img = document.getElementById('img_' + activeFullscreenNode);
+            if (img) img.src = currentImg;
+        }
+
+        const fsEventOpts = { passive: false };
+        fsCanvas.addEventListener('touchstart', fsHandleStart, fsEventOpts);
+        fsCanvas.addEventListener('touchmove', fsHandleMove, fsEventOpts);
+        fsCanvas.addEventListener('touchend', fsEndDrawing, fsEventOpts);
+        fsCanvas.addEventListener('touchcancel', fsEndDrawing, fsEventOpts);
+
+        fsCanvas.addEventListener('mousedown', fsHandleStart, fsEventOpts);
+        fsCanvas.addEventListener('mousemove', fsHandleMove, fsEventOpts);
+        fsCanvas.addEventListener('mouseup', fsEndDrawing, fsEventOpts);
+        fsCanvas.addEventListener('mouseleave', fsEndDrawing, fsEventOpts);
+
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) {
+                overlay.classList.remove('active');
+                setTimeout(() => {
+                    overlay.style.display = 'none';
+                    fsCanvas.dataset.activeNode = '';
+                    activeFullscreenNode = '';
+                }, 200);
+            }
         });
 
         // ----------------------------------------------------
