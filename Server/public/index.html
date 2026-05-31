@@ -43,21 +43,6 @@
             transition: background-color 0.3s ease;
         }
 
-        .node-label {
-            font-family: monospace;
-            font-size: 13px;
-            font-weight: bold;
-            background: #1e293b;
-            color: #f8fafc;
-            padding: 6px 14px;
-            border-radius: 20px;
-            margin-top: -15px;
-            position: relative;
-            display: inline-block;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
-            border: 2px solid #ffffff;
-        }
-
         svg {
             width: 100%;
             height: 100%;
@@ -166,6 +151,83 @@
         #fullscreen-overlay.active #fullscreen-canvas {
             transform: scale(1);
         }
+
+        #fullscreen-overlay .bg-controls-overlay {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            left: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            z-index: 1010;
+        }
+
+        #fullscreen-overlay .bg-color-square {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: transform 0.15s ease-out, border-color 0.15s ease-out;
+            box-sizing: border-box;
+        }
+
+        #fullscreen-overlay .bg-color-square:hover {
+            transform: scale(1.15);
+            border-color: #cbd5e1;
+        }
+
+        #fullscreen-overlay .controls-overlay {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            z-index: 1010;
+        }
+
+        #fullscreen-overlay .preset-container {
+            display: flex;
+            flex-direction: column-reverse;
+            gap: 12px;
+        }
+
+        #fullscreen-overlay .color-square {
+            width: 64px;
+            height: 64px;
+            border-radius: 50%;
+            border: 3px solid #fff;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+            cursor: pointer;
+            transition: transform 0.15s ease-out, border-color 0.15s ease-out;
+            box-sizing: border-box;
+        }
+
+        #fullscreen-overlay .color-square:hover {
+            transform: scale(1.2);
+            border-color: #e2e8f0;
+        }
+
+        .edit-indicator {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            width: 20px;
+            height: 20px;
+            background-color: #22c55e;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 20;
+        }
+
+        .node-wrapper.edited .edit-indicator {
+            display: block;
+        }
     </style>
 </head>
 
@@ -176,14 +238,36 @@
 
     <!-- NEW: The Fullscreen Overlay Container -->
     <div id="fullscreen-overlay">
+        <!-- Background Color Selector Menu -->
+        <div class="bg-controls-overlay">
+            <div class="bg-color-square" style="background: #ffffff;" data-bg="#ffffff"></div> <!-- White -->
+            <div class="bg-color-square" style="background: #fef3c7;" data-bg="#fef3c7"></div> <!-- Soft Cream/Yellow -->
+            <div class="bg-color-square" style="background: #e0f2fe;" data-bg="#e0f2fe"></div> <!-- Soft Blue -->
+            <div class="bg-color-square" style="background: #dcfce7;" data-bg="#dcfce7"></div> <!-- Soft Mint Green -->
+        </div>
+
         <canvas id="fullscreen-canvas"></canvas>
+
+        <div class="controls-overlay">
+            <!-- Preset Color Squares -->
+            <div class="preset-container">
+                <div class="color-square" style="background: #000000;" data-color="#000000"></div>
+                <div class="color-square" style="background: #ef4444;" data-color="#ef4444"></div>
+                <div class="color-square" style="background: #f97316;" data-color="#f97316"></div>
+                <div class="color-square" style="background: #eab308;" data-color="#eab308"></div>
+                <div class="color-square" style="background: #22c55e;" data-color="#22c55e"></div>
+                <div class="color-square" style="background: #3b82f6;" data-color="#3b82f6"></div>
+                <div class="color-square" style="background: #a855f7;" data-color="#a855f7"></div>
+                <div class="color-square" id="fs-eraser-square" style="background: #ffffff; border-color: #000000; border-radius: 12px; height: 100px;" data-color="eraser"></div> <!-- Eraser -->
+            </div>
+        </div>
     </div>
 
     <div class="viewer-controls">
         <button class="btn" id="btn-layout">Auto-Layout Graph</button>
         <button class="btn btn-secondary" id="btn-save">Export as PNG</button>
         <button class="btn btn-figma" id="btn-figma">Export to Figma</button>
-    </div>
+    </div>  
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
@@ -194,6 +278,14 @@
         let nodesData = {};
         let edgesData = [];
         let isDrawing = false; // Add global drawing state
+
+        function getBorderColor(nodeId) {
+            const idLower = nodeId.toLowerCase();
+            if (idLower.startsWith('tile1')) return 'lightgreen';
+            if (idLower.startsWith('tile2')) return 'lightblue';
+            if (idLower.startsWith('tile3')) return 'lightyellow';
+            return '#ffffff';
+        }
 
         socket.on('init_graph', (state) => {
             nodesData = state.nodes;
@@ -210,6 +302,9 @@
         socket.on('node_updated', (data) => {
             nodesData[data.id].image = data.image;
             if (data.bgColor) nodesData[data.id].bgColor = data.bgColor;
+            if (data.hasOwnProperty('onlineEdited')) {
+                nodesData[data.id].onlineEdited = data.onlineEdited;
+            }
             
             const img = document.getElementById('img_' + data.id);
             if (img) {
@@ -218,6 +313,15 @@
                     img.src = data.image;
                 }
                 if (data.bgColor) img.style.backgroundColor = data.bgColor;
+            }
+            
+            const wrapper = document.getElementById(data.id);
+            if (wrapper) {
+                if (nodesData[data.id].onlineEdited) {
+                    wrapper.classList.add('edited');
+                } else {
+                    wrapper.classList.remove('edited');
+                }
             }
             // Also update the fullscreen image live if it's currently open!
             const fsCanvas = document.getElementById('fullscreen-canvas');
@@ -315,13 +419,17 @@
             img.id = 'img_' + nodeData.id;
             img.className = 'node-img';
             img.style.backgroundColor = nodeData.bgColor || 'white';
+            img.style.borderColor = getBorderColor(nodeData.id);
 
-            const label = document.createElement('div');
-            label.className = 'node-label';
-            label.innerText = nodeData.id;
+            const indicator = document.createElement('div');
+            indicator.className = 'edit-indicator';
 
             wrapper.appendChild(img);
-            wrapper.appendChild(label);
+            wrapper.appendChild(indicator);
+
+            if (nodeData.onlineEdited) {
+                wrapper.classList.add('edited');
+            }
 
             wrapper.onmousedown = function (event) {
                 let shiftX = event.clientX - wrapper.getBoundingClientRect().left;
@@ -379,10 +487,72 @@
         let activeFullscreenNode = '';
         let lastX = 0, lastY = 0;
 
+        let fsCurrentColor = '#000000';
+        let fsCurrentBgColor = '#ffffff';
+        let fsIsEraser = false;
+
+        document.querySelectorAll('#fullscreen-overlay .color-square').forEach(square => {
+            square.addEventListener('click', (e) => {
+                const selectedColor = e.target.getAttribute('data-color');
+                if (selectedColor === 'eraser') {
+                    fsIsEraser = true;
+                    fsCurrentColor = fsCurrentBgColor;
+                } else {
+                    fsIsEraser = false;
+                    fsCurrentColor = selectedColor;
+                }
+            });
+        });
+
+        document.querySelectorAll('#fullscreen-overlay .bg-color-square').forEach(square => {
+            square.addEventListener('click', (e) => {
+                const selectedBg = e.target.getAttribute('data-bg');
+                fsCurrentBgColor = selectedBg;
+                fsCanvas.style.backgroundColor = selectedBg;
+                
+                const eraserSquare = document.getElementById('fs-eraser-square');
+                if (eraserSquare) {
+                    eraserSquare.style.backgroundColor = selectedBg;
+                }
+                
+                if (fsIsEraser) {
+                    fsCurrentColor = fsCurrentBgColor;
+                }
+
+                if (activeFullscreenNode) {
+                    nodesData[activeFullscreenNode].bgColor = selectedBg;
+                    nodesData[activeFullscreenNode].onlineEdited = true;
+                    
+                    socket.emit('update_node', { 
+                        id: activeFullscreenNode, 
+                        image: fsCanvas.toDataURL(), 
+                        bgColor: selectedBg,
+                        onlineEdited: true
+                    });
+                    const img = document.getElementById('img_' + activeFullscreenNode);
+                    if (img) img.style.backgroundColor = selectedBg;
+                    
+                    const wrapper = document.getElementById(activeFullscreenNode);
+                    if (wrapper) wrapper.classList.add('edited');
+                }
+            });
+        });
+
         function openFullscreen(nodeId, imageSrc, bgColor) {
             activeFullscreenNode = nodeId;
+            fsCurrentBgColor = bgColor || '#ffffff';
             fsCanvas.dataset.activeNode = nodeId;
-            fsCanvas.style.backgroundColor = bgColor || 'white';
+            fsCanvas.style.backgroundColor = fsCurrentBgColor;
+            fsCanvas.style.borderColor = getBorderColor(nodeId);
+
+            const eraserSquare = document.getElementById('fs-eraser-square');
+            if (eraserSquare) {
+                eraserSquare.style.backgroundColor = fsCurrentBgColor;
+            }
+
+            if (fsIsEraser) {
+                fsCurrentColor = fsCurrentBgColor;
+            }
             
             const img = new Image();
             img.onload = () => {
@@ -425,8 +595,8 @@
             fsCtx.beginPath();
             fsCtx.lineCap = 'round';
             fsCtx.lineJoin = 'round';
-            fsCtx.lineWidth = 4;
-            fsCtx.strokeStyle = '#000000'; // Default black drawing
+            fsCtx.lineWidth = fsIsEraser ? 65 : 4;
+            fsCtx.strokeStyle = fsCurrentColor; // Set dynamic stroke color
             fsCtx.moveTo(lastX, lastY);
             fsCtx.lineTo(lastX, lastY);
             fsCtx.stroke();
@@ -453,14 +623,19 @@
             
             const currentImg = fsCanvas.toDataURL();
             nodesData[activeFullscreenNode].image = currentImg;
+            nodesData[activeFullscreenNode].onlineEdited = true;
             socket.emit('update_node', { 
                 id: activeFullscreenNode, 
                 image: currentImg, 
-                bgColor: nodesData[activeFullscreenNode].bgColor 
+                bgColor: nodesData[activeFullscreenNode].bgColor,
+                onlineEdited: true
             });
             
             const img = document.getElementById('img_' + activeFullscreenNode);
             if (img) img.src = currentImg;
+            
+            const wrapper = document.getElementById(activeFullscreenNode);
+            if (wrapper) wrapper.classList.add('edited');
         }
 
         const fsEventOpts = { passive: false };
@@ -708,20 +883,12 @@
                     ctx.fill();
 
                     ctx.shadowColor = 'transparent';
+
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = getBorderColor(n.id);
+                    ctx.stroke();
+
                     ctx.drawImage(img, drawX + 4, drawY + 4, 142, 142);
-
-                    ctx.font = 'bold 13px monospace';
-                    const textWidth = ctx.measureText(n.id).width;
-
-                    ctx.fillStyle = '#1e293b';
-                    ctx.beginPath();
-                    ctx.roundRect(drawX + 75 - (textWidth / 2) - 14, drawY + 135, textWidth + 28, 26, 13);
-                    ctx.fill();
-
-                    ctx.fillStyle = '#f8fafc';
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(n.id, drawX + 75, drawY + 148);
 
                     loadedImages++;
                     if (loadedImages === nodes.length) {
@@ -792,18 +959,9 @@
                 const drawX = n.x - minX;
                 const drawY = n.y - minY;
 
-                svgStr += `<rect x="${drawX}" y="${drawY}" width="150" height="150" rx="16" fill="${n.bgColor || '#ffffff'}" />`;
+                svgStr += `<rect x="${drawX}" y="${drawY}" width="150" height="150" rx="16" fill="${n.bgColor || '#ffffff'}" stroke="${getBorderColor(n.id)}" stroke-width="4" />`;
 
                 svgStr += `<image href="${n.image}" x="${drawX + 4}" y="${drawY + 4}" width="142" height="142" preserveAspectRatio="none" clip-path="url(#clip-${n.id})" />`;
-
-                const charWidth = 8;
-                const textWidth = n.id.length * charWidth;
-                const pillWidth = textWidth + 28;
-                const pillX = drawX + 75 - (pillWidth / 2);
-
-                svgStr += `<rect x="${pillX}" y="${drawY + 135}" width="${pillWidth}" height="26" rx="13" fill="#1e293b" />`;
-
-                svgStr += `<text x="${drawX + 75}" y="${drawY + 152}" font-family="monospace" font-size="13px" font-weight="bold" fill="#f8fafc" text-anchor="middle">${n.id}</text>`;
             });
 
             svgStr += `</svg>`;

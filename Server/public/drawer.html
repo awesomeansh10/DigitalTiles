@@ -213,6 +213,51 @@
         .node-popup.show {
             opacity: 1;
         }
+
+        /* Edit Indicator Styling */
+        .edit-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 24px;
+            height: 24px;
+            background-color: #22c55e;
+            border: 3px solid white;
+            border-radius: 50%;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            display: none;
+            z-index: 1000;
+        }
+
+        .edit-indicator.show {
+            display: block;
+        }
+
+        /* Edge Animations */
+        .edge-indicator {
+            position: fixed;
+            z-index: 1000;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 0 40px 15px var(--edge-color, white);
+            background-color: var(--edge-color, white);
+        }
+
+        .edge-indicator.show {
+            opacity: 1;
+            animation: pulse-edge 1.5s infinite alternate;
+        }
+
+        @keyframes pulse-edge {
+            0% { opacity: 0.4; }
+            100% { opacity: 1; }
+        }
+
+        .edge-top { top: -10px; left: 0; right: 0; height: 10px; }
+        .edge-bottom { bottom: -10px; left: 0; right: 0; height: 10px; }
+        .edge-left { top: 0; bottom: 0; left: -10px; width: 10px; }
+        .edge-right { top: 0; bottom: 0; right: -10px; width: 10px; }
     </style>
 </head>
 
@@ -220,7 +265,14 @@
 
     <canvas id="drawCanvas" draggable="false"></canvas>
 
-    <div id="node-popup" class="node-popup">Refreshing Node: <span id="popup-node-id"></span></div>
+    <div id="edge-top" class="edge-indicator edge-top"></div>
+    <div id="edge-right" class="edge-indicator edge-right"></div>
+    <div id="edge-bottom" class="edge-indicator edge-bottom"></div>
+    <div id="edge-left" class="edge-indicator edge-left"></div>
+
+    <div id="node-popup" class="node-popup"><span id="popup-message">Refreshing Node: </span><span id="popup-node-id"></span></div>
+
+    <div class="edit-indicator" id="edit-indicator"></div>
 
     <div class="debug-overlay" id="debug-menu">
         <div class="header-info">
@@ -297,13 +349,24 @@
         let popupTimeout = null;
         let switchTimeout = null;
         
-        function showNodePopup(nodeId) {
+        function getTileColor(tileId) {
+            if (!tileId) return '#ffffff';
+            const idLower = tileId.toLowerCase();
+            if (idLower.startsWith('tile1')) return 'lightgreen';
+            if (idLower.startsWith('tile2')) return 'lightblue';
+            if (idLower.startsWith('tile3')) return 'lightyellow';
+            return '#ffffff';
+        }
+
+        function showNodePopup(nodeId, message = "Refreshing Node: ") {
             const popup = document.getElementById('node-popup');
             const popupNodeId = document.getElementById('popup-node-id');
+            const popupMessage = document.getElementById('popup-message');
             
             // Extract just the node number (e.g., Tile1_node_3 -> 3)
             const nodeNumber = nodeId.split('_').pop();
             popupNodeId.innerText = nodeNumber;
+            if (popupMessage) popupMessage.innerText = message;
             
             // Remove the class and force a reflow to restart the animation instantly
             popup.classList.remove('show');
@@ -326,8 +389,12 @@
             if (currentNodeIndex >= 0) {
                 const currentImg = drawCanvas.toDataURL();
                 myNodes[currentNodeIndex].image = currentImg;
-                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg, bgColor: currentBgColor });
+                myNodes[currentNodeIndex].onlineEdited = false;
+                socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg, bgColor: currentBgColor, onlineEdited: false });
                 lastUpdateTime = Date.now();
+                
+                const indicator = document.getElementById('edit-indicator');
+                if (indicator) indicator.classList.remove('show');
             }
         }
 
@@ -354,6 +421,13 @@
             if (foundIndex !== -1) {
                 myNodes[foundIndex].image = data.image;
                 if (data.bgColor) myNodes[foundIndex].bgColor = data.bgColor;
+                if (data.hasOwnProperty('onlineEdited')) {
+                    myNodes[foundIndex].onlineEdited = data.onlineEdited;
+                }
+
+                if (data.onlineEdited) {
+                    showNodePopup(data.id, "Changes on Node: ");
+                }
 
                 if (currentNodeIndex === foundIndex && !isDrawing) {
                     currentBgColor = myNodes[foundIndex].bgColor || '#ffffff';
@@ -366,6 +440,15 @@
                     if (isEraser) {
                         currentColor = currentBgColor;
                         ctx.strokeStyle = currentColor;
+                    }
+                    
+                    const indicator = document.getElementById('edit-indicator');
+                    if (indicator) {
+                        if (myNodes[foundIndex].onlineEdited) {
+                            indicator.classList.add('show');
+                        } else {
+                            indicator.classList.remove('show');
+                        }
                     }
 
                     ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
@@ -421,6 +504,15 @@
                             if (isEraser) {
                                 currentColor = currentBgColor;
                             }
+                            
+                            const indicator = document.getElementById('edit-indicator');
+                            if (indicator) {
+                                if (activeNode.onlineEdited) {
+                                    indicator.classList.add('show');
+                                } else {
+                                    indicator.classList.remove('show');
+                                }
+                            }
 
                             document.getElementById('my-id').innerText = activeNode.id;
 
@@ -446,10 +538,16 @@
                             id: targetNodeId,
                             deviceId: DEVICE_ID,
                             image: 'data:,', // empty image initially
-                            bgColor: currentBgColor
+                            bgColor: currentBgColor,
+                            onlineEdited: false
                         };
                         myNodes.push(newNode);
                         currentNodeIndex = myNodes.length - 1;
+                        
+                        const indicator = document.getElementById('edit-indicator');
+                        if (indicator) {
+                            indicator.classList.remove('show');
+                        }
 
                         document.getElementById('my-device-id').innerText = DEVICE_ID;
                         document.getElementById('my-id').innerText = targetNodeId;
@@ -462,7 +560,8 @@
                             x: Math.random() * 400 + 100,
                             y: Math.random() * 400 + 100,
                             image: drawCanvas.toDataURL(),
-                            bgColor: currentBgColor
+                            bgColor: currentBgColor,
+                            onlineEdited: false
                         });
 
                         if (data.nodeNumber >= nodeCounter) {
@@ -470,6 +569,17 @@
                         }
                     }
                 }, 15);
+            } else if (data.action === 'tile_connected' && data.deviceId === DEVICE_ID) {
+                const edgeEl = document.getElementById('edge-' + data.edge);
+                if (edgeEl) {
+                    edgeEl.style.setProperty('--edge-color', getTileColor(data.targetTile));
+                    edgeEl.classList.add('show');
+                }
+            } else if (data.action === 'tile_disconnected' && data.deviceId === DEVICE_ID) {
+                const edgeEl = document.getElementById('edge-' + data.edge);
+                if (edgeEl) {
+                    edgeEl.classList.remove('show');
+                }
             }
         });
 
@@ -485,10 +595,16 @@
                     id: newNodeId,
                     deviceId: DEVICE_ID,
                     image: 'data:,', // empty image initially
-                    bgColor: currentBgColor
+                    bgColor: currentBgColor,
+                    onlineEdited: false
                 };
                 myNodes.push(newNode);
                 currentNodeIndex = myNodes.length - 1;
+                
+                const indicator = document.getElementById('edit-indicator');
+                if (indicator) {
+                    indicator.classList.remove('show');
+                }
 
                 document.getElementById('my-device-id').innerText = DEVICE_ID;
                 document.getElementById('my-id').innerText = newNodeId;
@@ -501,7 +617,8 @@
                     x: Math.random() * 400 + 100,
                     y: Math.random() * 400 + 100,
                     image: drawCanvas.toDataURL(),
-                    bgColor: currentBgColor
+                    bgColor: currentBgColor,
+                    onlineEdited: false
                 });
             }, 15);
         }
@@ -527,6 +644,15 @@
                 }
                 if (isEraser) {
                     currentColor = currentBgColor;
+                }
+                
+                const indicator = document.getElementById('edit-indicator');
+                if (indicator) {
+                    if (activeNode.onlineEdited) {
+                        indicator.classList.add('show');
+                    } else {
+                        indicator.classList.remove('show');
+                    }
                 }
 
                 document.getElementById('my-id').innerText = activeNode.id;
@@ -694,7 +820,11 @@ function endDrawing(e) {
 
     const currentImg = drawCanvas.toDataURL();
     myNodes[currentNodeIndex].image = currentImg;
-        socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg, bgColor: currentBgColor });
+    myNodes[currentNodeIndex].onlineEdited = false;
+    socket.emit('update_node', { id: myNodes[currentNodeIndex].id, image: currentImg, bgColor: currentBgColor, onlineEdited: false});
+    
+    const indicator = document.getElementById('edit-indicator');
+    if (indicator) indicator.classList.remove('show');
 }
         const eventOpts = { passive: false };
 

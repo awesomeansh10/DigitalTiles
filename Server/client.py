@@ -56,7 +56,7 @@ def connect_nodes(source, target):
         'target': target
     })
 
-def connect_tiles(source, target):
+def connect_tiles(source, target, edge):
     """
     Sends a command to connect all nodes on a source tile to all nodes on a target tile.
     """
@@ -66,8 +66,14 @@ def connect_tiles(source, target):
         'source': source,
         'target': target
     })
+    sio.emit('python_update', {
+        'action': 'tile_connected',
+        'deviceId': source,
+        'targetTile': target,
+        'edge': edge
+    })
 
-def disconnect_tiles(source, target):
+def disconnect_tiles(source, target, edge):
     """
     Sends a command to disconnect all nodes on a source tile from all nodes on a target tile.
     """
@@ -76,6 +82,11 @@ def disconnect_tiles(source, target):
     sio.emit('disconnect_tiles', {
         'source': source,
         'target': target
+    })
+    sio.emit('python_update', {
+        'action': 'tile_disconnected',
+        'deviceId': source,
+        'edge': edge
     })
 
 
@@ -122,6 +133,80 @@ def check_state():
     elif not current_sequence or current_sequence[-1] != state:
         current_sequence.append(state)
 
+
+tileconnections = [0,0,0,0]
+
+def button1_pressed():
+    print("\nButton clicked! Transmitting message over UART...")
+    uart.write(device_id.encode('utf-8'))
+    if uart.in_waiting > 0:
+        incoming_bytes = uart.read(uart.in_waiting)
+        incoming_string = incoming_bytes.decode('utf-8').strip()       
+        target = incoming_string[4]  # Extract the tile number from the incoming string
+        print(f"Received message: '{incoming_string}' - connecting to {target}")
+        target1 = "Tile"+str(target)
+        connect_tiles(source=device_id, target=target1, edge='top')
+        tileconnections[0] = int(target)
+
+def button1_released():
+    target = "Tile"+str(tileconnections[0])
+    disconnect_tiles(source=device_id, target=target, edge='top')
+    tileconnections[0] = 0
+
+
+def button2_pressed():
+    print("\nButton clicked! Transmitting message over UART...")
+    uart.write(device_id.encode('utf-8'))
+    if uart.in_waiting > 0:
+        incoming_bytes = uart.read(uart.in_waiting)
+        incoming_string = incoming_bytes.decode('utf-8').strip()       
+        target = incoming_string[4]  # Extract the tile number from the incoming string
+        print(f"Received message: '{incoming_string}' - connecting to {target}")
+        target1 = "Tile"+str(target)
+        connect_tiles(source=device_id, target=target1, edge='right')
+        tileconnections[1] = int(target)
+
+def button2_released():
+    target = "Tile"+str(tileconnections[1])
+    disconnect_tiles(source=device_id, target=target, edge='right')
+    tileconnections[1] = 0
+
+
+def button3_pressed():
+    print("\nButton clicked! Transmitting message over UART...")
+    uart.write(device_id.encode('utf-8'))
+    if uart.in_waiting > 0:
+        incoming_bytes = uart.read(uart.in_waiting)
+        incoming_string = incoming_bytes.decode('utf-8').strip()       
+        target = incoming_string[4]  # Extract the tile number from the incoming string
+        print(f"Received message: '{incoming_string}' - connecting to {target}")
+        target1 = "Tile"+str(target)
+        connect_tiles(source=device_id, target=target1, edge='bottom')
+        tileconnections[2] = int(target)
+
+def button3_released():
+    target = "Tile"+str(tileconnections[2])
+    disconnect_tiles(source=device_id, target=target, edge='bottom')
+    tileconnections[2] = 0
+
+
+
+def button4_pressed():
+    print("\nButton clicked! Transmitting message over UART...")
+    uart.write(device_id.encode('utf-8'))
+    if uart.in_waiting > 0:
+        incoming_bytes = uart.read(uart.in_waiting)
+        incoming_string = incoming_bytes.decode('utf-8').strip()       
+        target = incoming_string[4]  # Extract the tile number from the incoming string
+        print(f"Received message: '{incoming_string}' - connecting to {target}")
+        target1 = "Tile"+str(target)
+        connect_tiles(source=device_id, target=target1, edge='left')
+        tileconnections[3] = int(target)
+
+def button4_released():
+    target = "Tile"+str(tileconnections[3])
+    disconnect_tiles(source=device_id, target=target, edge='left')
+    tileconnections[3] = 0
 
 
 if __name__ == '__main__':
@@ -175,26 +260,6 @@ if __name__ == '__main__':
 
         print("\nWaiting for encoder rotation...")
         
-        # Check for button click
-        # if button1.is_pressed and connected_tiles[0] == 0:
-        #     print("\nButton clicked! Transmitting message over UART...")
-        #     uart.write(device_id.encode('utf-8'))
-        #     if uart.in_waiting > 0:
-        # # 1. Read the raw bytes (e.g., b'Tile1\n')
-        #         incoming_bytes = uart.read(uart.in_waiting)
-        #         incoming_string = incoming_bytes.decode('utf-8').strip()       
-        #         target = incoming_string[4]  # Extract the tile number from the incoming string
-        #         print(f"Received message: '{incoming_string}' - connecting to {target}")
-        #         target1 = "Tile"+str(target)
-        #         connect_tiles(source=device_id, target=target1)
-        #         connected_tiles[0] = int(target)
-
-        # elif not button1.is_pressed and connected_tiles[0] !=0:
-        #     target = "Tile"+str(connected_tiles[0])
-        #     disconnect_tiles(source=device_id, target=target)
-        #     connected_tiles[0] = 0
-
-
 
 
         clk.when_pressed = check_state
@@ -204,6 +269,15 @@ if __name__ == '__main__':
 
 
         menubutton.when_pressed = toggle_menu
+
+        button1.when_pressed = button1_pressed
+        button1.when_released = button1_released
+        button2.when_pressed = button2_pressed
+        button2.when_released = button2_released
+        button3.when_pressed = button3_pressed
+        button3.when_released = button3_released
+        button4.when_pressed = button4_pressed
+        button4.when_released = button4_released
 
         pause()
 
@@ -216,5 +290,3 @@ if __name__ == '__main__':
         # 6. Disconnect at the end to allow the script to exit cleanly
         if sio.connected:
             sio.disconnect()
-
-
