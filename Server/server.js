@@ -31,17 +31,29 @@ io.on('connection', (socket) => {
                 // The new node belongs to a source tile, connect it to all target nodes
                 const targetNodes = Object.values(graphState.nodes).filter(n => n.deviceId === conn.target);
                 targetNodes.forEach(targetNode => {
-                    const edgeData = { source: nodeData.id, target: targetNode.id };
-                    graphState.edges.push(edgeData);
-                    io.emit('edge_added', edgeData);
+                    const edgeExists = graphState.edges.some(
+                        e => (e.source === nodeData.id && e.target === targetNode.id) ||
+                             (e.source === targetNode.id && e.target === nodeData.id)
+                    );
+                    if (!edgeExists) {
+                        const edgeData = { source: nodeData.id, target: targetNode.id };
+                        graphState.edges.push(edgeData);
+                        io.emit('edge_added', edgeData);
+                    }
                 });
             } else if (conn.target === nodeData.deviceId) {
                 // The new node belongs to a target tile, connect all source nodes to it
                 const sourceNodes = Object.values(graphState.nodes).filter(n => n.deviceId === conn.source);
                 sourceNodes.forEach(sourceNode => {
-                    const edgeData = { source: sourceNode.id, target: nodeData.id };
-                    graphState.edges.push(edgeData);
-                    io.emit('edge_added', edgeData);
+                    const edgeExists = graphState.edges.some(
+                        e => (e.source === sourceNode.id && e.target === nodeData.id) ||
+                             (e.source === nodeData.id && e.target === sourceNode.id)
+                    );
+                    if (!edgeExists) {
+                        const edgeData = { source: sourceNode.id, target: nodeData.id };
+                        graphState.edges.push(edgeData);
+                        io.emit('edge_added', edgeData);
+                    }
                 });
             }
         });
@@ -75,7 +87,8 @@ io.on('connection', (socket) => {
     socket.on('connect_tiles', (data) => {
         // Record the connection between the tiles if it hasn't been recorded yet
         const connectionExists = graphState.tileConnections.some(
-            conn => conn.source === data.source && conn.target === data.target
+            conn => (conn.source === data.source && conn.target === data.target) || 
+                    (conn.source === data.target && conn.target === data.source)
         );
         
         if (!connectionExists) {
@@ -89,7 +102,8 @@ io.on('connection', (socket) => {
             targetNodes.forEach(targetNode => {
                 // Only create the edge if it doesn't already exist to avoid duplicates
                 const edgeExists = graphState.edges.some(
-                    e => e.source === sourceNode.id && e.target === targetNode.id
+                    e => (e.source === sourceNode.id && e.target === targetNode.id) || 
+                         (e.source === targetNode.id && e.target === sourceNode.id)
                 );
                 if (!edgeExists) {
                     const edgeData = { source: sourceNode.id, target: targetNode.id };
@@ -104,14 +118,18 @@ io.on('connection', (socket) => {
     socket.on('disconnect_tiles', (data) => {
         // Remove the connection between the tiles
         graphState.tileConnections = graphState.tileConnections.filter(
-            conn => !(conn.source === data.source && conn.target === data.target)
+            conn => !(
+                (conn.source === data.source && conn.target === data.target) ||
+                (conn.source === data.target && conn.target === data.source)
+            )
         );
 
         const sourceNodeIds = Object.values(graphState.nodes).filter(n => n.deviceId === data.source).map(n => n.id);
         const targetNodeIds = Object.values(graphState.nodes).filter(n => n.deviceId === data.target).map(n => n.id);
         
         const edgesToRemove = graphState.edges.filter(
-            e => sourceNodeIds.includes(e.source) && targetNodeIds.includes(e.target)
+            e => (sourceNodeIds.includes(e.source) && targetNodeIds.includes(e.target)) ||
+                 (sourceNodeIds.includes(e.target) && targetNodeIds.includes(e.source))
         );
         graphState.edges = graphState.edges.filter(e => !edgesToRemove.includes(e));
 
