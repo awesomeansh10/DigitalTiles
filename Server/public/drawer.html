@@ -563,8 +563,8 @@
                         socket.emit('add_node', {
                             id: targetNodeId,
                             deviceId: DEVICE_ID,
-                            x: Math.random() * 400 + 100,
-                            y: Math.random() * 400 + 100,
+                            x: Math.random() * 1200 + 100,
+                            y: Math.random() * 800 + 100,
                             image: drawCanvas.toDataURL(),
                             bgColor: currentBgColor,
                             onlineEdited: false
@@ -620,8 +620,8 @@
                 socket.emit('add_node', {
                     id: newNodeId,
                     deviceId: DEVICE_ID,
-                    x: Math.random() * 400 + 100,
-                    y: Math.random() * 400 + 100,
+                    x: Math.random() * 1200 + 100,
+                    y: Math.random() * 800 + 100,
                     image: drawCanvas.toDataURL(),
                     bgColor: currentBgColor,
                     onlineEdited: false

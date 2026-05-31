@@ -15,6 +15,7 @@ load_dotenv()
 
 # --- Global Configuration ---
 server_url='http://tiles.anshagarwal.net:1234'
+# server_url='http://localhost:1234'
 
 device_id = os.environ.get("DEVICE_ID", "Tile1")
 connected_tiles = [0,0,0,0]

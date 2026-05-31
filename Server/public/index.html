@@ -53,7 +53,6 @@
 
         path.connection-line {
             fill: none;
-            stroke: #94a3b8;
             stroke-width: 5;
             stroke-linecap: round;
         }
@@ -329,7 +328,7 @@
     </div>
 
     <div class="viewer-controls">
-        <button class="btn icon-btn" id="btn-layout" title="Auto-Layout Graph">
+        <button class="btn icon-btn" id="btn-layout" title="Shuffle Graph">
             <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="16 3 21 3 21 8"></polyline>
                 <line x1="4" y1="20" x2="21" y2="3"></line>
@@ -371,14 +370,26 @@
             return '#ffffff';
         }
 
+        function clampNodePosition(nodeData) {
+            const margin = 20;
+            const maxX = Math.max(margin, window.innerWidth - 150 - margin);
+            const maxY = Math.max(margin, window.innerHeight - 150 - margin);
+            nodeData.x = Math.max(margin, Math.min(maxX, nodeData.x));
+            nodeData.y = Math.max(margin, Math.min(maxY, nodeData.y));
+        }
+
         socket.on('init_graph', (state) => {
             nodesData = state.nodes;
             edgesData = state.edges;
-            Object.values(nodesData).forEach(renderNode);
+            Object.values(nodesData).forEach(n => {
+                clampNodePosition(n);
+                renderNode(n);
+            });
             drawEdges();
         });
 
         socket.on('node_added', (nodeData) => {
+            clampNodePosition(nodeData);
             nodesData[nodeData.id] = nodeData;
             renderNode(nodeData);
         });
@@ -442,7 +453,7 @@
 
         function resolveCollisions(activeId) {
             const nodes = Object.values(nodesData);
-            const MIN_DIST = 170;
+            const MIN_DIST = 220; // Increased from 170 to keep tiles further apart
             let moved = new Set();
 
             for (let iter = 0; iter < 3; iter++) {
@@ -747,7 +758,10 @@
         // ----------------------------------------------------
         function drawEdges() {
             svgEdges.innerHTML = '';
-            edgesData.forEach(edge => {
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            svgEdges.appendChild(defs);
+
+            edgesData.forEach((edge, index) => {
                 const source = nodesData[edge.source];
                 const target = nodesData[edge.target];
 
@@ -765,11 +779,33 @@
                     const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
                     const cy2 = y2;
 
+                    const gradientId = `grad-${index}`;
+                    const linearGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                    linearGradient.setAttribute('id', gradientId);
+                    linearGradient.setAttribute('x1', x1);
+                    linearGradient.setAttribute('y1', y1);
+                    linearGradient.setAttribute('x2', x2);
+                    linearGradient.setAttribute('y2', y2);
+                    linearGradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+
+                    const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                    stop1.setAttribute('offset', '0%');
+                    stop1.setAttribute('stop-color', getBorderColor(source.id));
+                    
+                    const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                    stop2.setAttribute('offset', '100%');
+                    stop2.setAttribute('stop-color', getBorderColor(target.id));
+
+                    linearGradient.appendChild(stop1);
+                    linearGradient.appendChild(stop2);
+                    defs.appendChild(linearGradient);
+
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     const pathString = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
 
                     path.setAttribute('d', pathString);
                     path.setAttribute('class', 'connection-line');
+                    path.setAttribute('stroke', `url(#${gradientId})`);
 
                     svgEdges.appendChild(path);
                 }
@@ -787,13 +823,23 @@
 
             const initialPos = {};
             const targetPos = {};
+            const margin = 20;
+            const maxX = Math.max(margin, window.innerWidth - 150 - margin);
+            const maxY = Math.max(margin, window.innerHeight - 150 - margin);
+
             nodes.forEach(n => {
                 initialPos[n.id] = { x: n.x, y: n.y };
-                targetPos[n.id] = { x: n.x, y: n.y };
+                // Randomly scatter nodes before applying forces to shuffle them more effectively
+                let rx = (window.innerWidth / 2 - 75) + (Math.random() - 0.5) * window.innerWidth * 0.9;
+                let ry = (window.innerHeight / 2 - 75) + (Math.random() - 0.5) * window.innerHeight * 0.9;
+                targetPos[n.id] = { 
+                    x: Math.max(margin, Math.min(maxX, rx)), 
+                    y: Math.max(margin, Math.min(maxY, ry))
+                };
             });
 
             const iterations = 150;
-            const idealSpringLength = 320;
+            const idealSpringLength = 450; // Increased resting distance for connected edges
             const centerX = window.innerWidth / 2 - 75;
             const centerY = window.innerHeight / 2 - 75;
 
@@ -808,13 +854,14 @@
                         let dy = targetPos[nodes[a].id].y - targetPos[nodes[b].id].y;
                         let dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
 
-                        let force = 60000 / (dist * dist);
+                        // Increased base repulsion force further to spread tiles out
+                        let force = 180000 / (dist * dist);
                         forces[nodes[a].id].x += (dx / dist) * force;
                         forces[nodes[a].id].y += (dy / dist) * force;
                         forces[nodes[b].id].x -= (dx / dist) * force;
                         forces[nodes[b].id].y -= (dy / dist) * force;
 
-                        const MIN_DIST = 170;
+                        const MIN_DIST = 220; // Increased collision boundary for shuffle algorithm
                         if (dist < MIN_DIST) {
                             let overlap = MIN_DIST - dist;
                             let pushX = (dx / dist) * overlap * 0.5;
@@ -841,12 +888,17 @@
                     }
                 });
 
+                // Reduced the centering gravity from 0.05 to 0.015 so they don't clump back to the middle
                 nodes.forEach(n => {
-                    forces[n.id].x += (centerX - targetPos[n.id].x) * 0.05;
-                    forces[n.id].y += (centerY - targetPos[n.id].y) * 0.05;
+                    forces[n.id].x += (centerX - targetPos[n.id].x) * 0.015;
+                    forces[n.id].y += (centerY - targetPos[n.id].y) * 0.015;
 
                     targetPos[n.id].x += Math.max(-25, Math.min(25, forces[n.id].x)) * temperature;
                     targetPos[n.id].y += Math.max(-25, Math.min(25, forces[n.id].y)) * temperature;
+
+                    // Ensure nodes stay strictly within screen bounds
+                    targetPos[n.id].x = Math.max(margin, Math.min(maxX, targetPos[n.id].x));
+                    targetPos[n.id].y = Math.max(margin, Math.min(maxY, targetPos[n.id].y));
                 });
             }
 
@@ -923,7 +975,6 @@
                 }
             }
 
-            ctx.strokeStyle = '#94a3b8';
             ctx.lineWidth = 5;
             ctx.lineCap = 'round';
 
@@ -942,6 +993,11 @@
                     const cy1 = y1;
                     const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
                     const cy2 = y2;
+
+                    const grad = ctx.createLinearGradient(x1, y1, x2, y2);
+                    grad.addColorStop(0, getBorderColor(source.id));
+                    grad.addColorStop(1, getBorderColor(target.id));
+                    ctx.strokeStyle = grad;
 
                     ctx.beginPath();
                     ctx.moveTo(x1, y1);
@@ -1017,9 +1073,25 @@
             nodes.forEach(n => {
                 svgStr += `<clipPath id="clip-${n.id}"><rect x="${n.x - minX + 4}" y="${n.y - minY + 4}" width="142" height="142" rx="12" /></clipPath>`;
             });
+
+            edgesData.forEach((edge, i) => {
+                const source = nodesData[edge.source];
+                const target = nodesData[edge.target];
+                if (source && target) {
+                    const x1 = source.x + 75 - minX;
+                    const y1 = source.y + 75 - minY;
+                    const x2 = target.x + 75 - minX;
+                    const y2 = target.y + 75 - minY;
+
+                    svgStr += `<linearGradient id="grad-figma-${i}" x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" gradientUnits="userSpaceOnUse">`;
+                    svgStr += `<stop offset="0%" stop-color="${getBorderColor(source.id)}" />`;
+                    svgStr += `<stop offset="100%" stop-color="${getBorderColor(target.id)}" />`;
+                    svgStr += `</linearGradient>`;
+                }
+            });
             svgStr += `</defs>`;
 
-            edgesData.forEach(edge => {
+            edgesData.forEach((edge, i) => {
                 const source = nodesData[edge.source];
                 const target = nodesData[edge.target];
                 if (source && target) {
@@ -1035,7 +1107,7 @@
                     const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
                     const cy2 = y2;
 
-                    svgStr += `<path d="M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}" fill="none" stroke="#94a3b8" stroke-width="5" stroke-linecap="round" />`;
+                    svgStr += `<path d="M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}" fill="none" stroke="url(#grad-figma-${i})" stroke-width="5" stroke-linecap="round" />`;
                 }
             });
 
