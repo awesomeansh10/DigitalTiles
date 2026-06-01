@@ -3,13 +3,13 @@ encoder gnd - physical pin 9
 encoder something - gpio 17
 encoder something else - gpio 27
 
-menu button - gpio 0
+menu button - gpio 26
 menu button -gnd 
 
 uart 1 - gpio 20 tx 
 uart 1 - gpio 21 rx
 
-uart 2 - gpio 1 tx
+uart 2 - gpio 12 tx
 uart 2 - gpio 7 rx
 
 uart 3 - gpio 8 tx

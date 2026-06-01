@@ -28,7 +28,7 @@ sio = socketio.Client()
 BAUD_RATE = 9600
 PORTS = {
     'top':    {'tx': 20,  'rx': 21,  'connected_to': None, 'cb': None},
-    'right':  {'tx': 1, 'rx': 7, 'connected_to': None, 'cb': None},
+    'right':  {'tx': 12, 'rx': 7, 'connected_to': None, 'cb': None},
     'bottom': {'tx': 8, 'rx': 25, 'connected_to': None, 'cb': None},
     'left':   {'tx': 24, 'rx': 23, 'connected_to': None, 'cb': None}
 }
@@ -227,7 +227,7 @@ if __name__ == '__main__':
         ensure_connection()
 
         # Initialize hardware controls
-        menubutton = Button(0, pull_up=True)
+        menubutton = Button(26, pull_up=True)
         clk = Button(17, pull_up=True)
         dt = Button(27, pull_up=True)
 
