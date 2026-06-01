@@ -1,28 +1,45 @@
 import socketio
 import time
-try:
-    import serial
-    from gpiozero import RotaryEncoder, Button
-    from signal import pause
-except ImportError:
-    print("Serial library not available.")
 import os
 from dotenv import load_dotenv
 
+try:
+    from gpiozero import RotaryEncoder, Button
+    from signal import pause
+    import pigpio # Replacing hardware serial with pigpio for multi-port software serial
+except ImportError:
+    print("Required hardware libraries not available. Run: sudo apt-get install pigpio && pip install gpiozero pigpio")
 
 # Load environment variables from .env file
 load_dotenv()
 
 # --- Global Configuration ---
-server_url='http://tiles.anshagarwal.net:1234'
-# server_url='http://localhost:1234'
+server_url = 'http://tiles.anshagarwal.net:1234'
+# server_url = 'http://localhost:1234'
 
 device_id = os.environ.get("DEVICE_ID", "Tile1")
-connected_tiles = [0,0,0,0]
+
 # 1. Create a single, persistent client instance
 sio = socketio.Client()
 
-# 2. Define global event handlers for connect/disconnect events
+# --- Pogo Pin Mesh Configuration ---
+# You must wire your pogo pins to these GPIO numbers.
+# Remember the crossover rule: Your pogo cables must route TX to RX, and RX to TX!
+BAUD_RATE = 9600
+PORTS = {
+    'top':    {'tx': 5,  'rx': 6,  'connected_to': None, 'cb': None},
+    'right':  {'tx': 12, 'rx': 13, 'connected_to': None, 'cb': None},
+    'bottom': {'tx': 16, 'rx': 19, 'connected_to': None, 'cb': None},
+    'left':   {'tx': 20, 'rx': 21, 'connected_to': None, 'cb': None}
+}
+
+# Connect to the local pigpio daemon
+pi = pigpio.pi()
+if not pi.connected:
+    print("Failed to connect to pigpiod. Run 'sudo systemctl start pigpiod'")
+    exit()
+
+# --- Socket.io Event Handlers ---
 @sio.event
 def connect():
     print("Connection established with the server.")
@@ -32,45 +49,26 @@ def disconnect():
     print("Disconnected from the server.")
 
 def ensure_connection():
-    """Ensures the client is connected to the server before sending a command."""
     if not sio.connected:
         print(f"Connecting to {server_url}...")
-        sio.connect(server_url, wait_timeout=10)
+        try:
+            sio.connect(server_url, wait_timeout=10)
+        except Exception as e:
+            print(f"Socket connection failed: {e}")
 
-# 3. Refactor functions to simply emit events over the existing connection
 def switch_active_node(node_number):
-    """
-    Sends a command to switch the active node on the configured device.
-    """
     ensure_connection()
-    print(f"Sending command to switch device '{device_id}' to node number {node_number}")
+    print(f"Switching device '{device_id}' to node number {node_number}")
     sio.emit('python_update', {
         'action': 'switch_node',
         'deviceId': device_id,
         'nodeNumber': node_number
     })
 
-def connect_nodes(source, target):
-    """
-    Sends a command to add an edge between two nodes.
-    """
-    ensure_connection()
-    print(f"Sending command to connect '{source}' to '{target}'")
-    sio.emit('add_edge', {
-        'source': source,
-        'target': target
-    })
-
 def connect_tiles(source, target, edge):
-    """
-    Sends a command to connect all nodes on a source tile to all nodes on a target tile.
-    """
     ensure_connection()
-    print(f"Sending command to connect all nodes on tile '{source}' to tile '{target}'")
-    sio.emit('connect_tiles', {
-        'source': source,
-        'target': target
-    })
+    print(f"Connecting tile '{source}' to tile '{target}' on the {edge} edge")
+    sio.emit('connect_tiles', {'source': source, 'target': target})
     sio.emit('python_update', {
         'action': 'tile_connected',
         'deviceId': source,
@@ -79,59 +77,42 @@ def connect_tiles(source, target, edge):
     })
 
 def disconnect_tiles(source, target, edge):
-    """
-    Sends a command to disconnect all nodes on a source tile from all nodes on a target tile.
-    """
     ensure_connection()
-    print(f"Sending command to disconnect all nodes on tile '{source}' from tile '{target}'")
-    sio.emit('disconnect_tiles', {
-        'source': source,
-        'target': target
-    })
+    print(f"Disconnecting tile '{source}' from tile '{target}' on the {edge} edge")
+    sio.emit('disconnect_tiles', {'source': source, 'target': target})
     sio.emit('python_update', {
         'action': 'tile_disconnected',
         'deviceId': source,
         'edge': edge
     })
 
-
-
-
 def toggle_menu():
-    """
-    Sends a command to toggle the menu in the drawer.
-    """
     ensure_connection()
-    print(f"Sending command to toggle menu for device '{device_id}'")
+    print(f"Toggling menu for device '{device_id}'")
     sio.emit('toggle_menu', {'deviceId': device_id})
 
 
+# --- Rotary Encoder Logic ---
+steps = 0
+current_sequence = []
+
 def check_state():
     global current_sequence, steps
-    
     state = (clk.is_active, dt.is_active)
     
     if state == (False, False):
-        # Cycle complete! Check if both critical states occurred during this click
         if (True, True) in current_sequence and (False, True) in current_sequence:
             idx_11 = current_sequence.index((True, True))
             idx_01 = current_sequence.index((False, True))
             
-            # Check which state happened first
             if idx_01 < idx_11:
                 steps += 1
-                print(f"Rotated Clockwise! Current steps: {steps}")
             else:
                 steps -= 1
-                print(f"Rotated Anti-clockwise! Current steps: {steps}")
             
-            if steps <= 0:
-                activenode = abs(steps)
-                if activenode == 0:
-                    activenode = 1
-            else:
-                activenode = steps
-
+            activenode = abs(steps) if steps <= 0 else steps
+            if activenode == 0: activenode = 1
+            
             switch_active_node(node_number=activenode)
 
         current_sequence.clear()
@@ -139,159 +120,142 @@ def check_state():
         current_sequence.append(state)
 
 
-tileconnections = [0,0,0,0]
+# --- Pogo Mesh Networking Logic ---
 
-def button1_pressed():
-    print("\nButton clicked! Transmitting message over UART...")
-    uart.write(device_id.encode('utf-8'))
-    if uart.in_waiting > 0:
-        incoming_bytes = uart.read(uart.in_waiting)
-        incoming_string = incoming_bytes.decode('utf-8').strip()       
-        target = incoming_string[4]  # Extract the tile number from the incoming string
-        print(f"Received message: '{incoming_string}' - connecting to {target}")
-        target1 = "Tile"+str(target)
-        connect_tiles(source=device_id, target=target1, edge='top')
-        tileconnections[0] = int(target)
+def execute_handshake(edge):
+    """Executes the two-way ID exchange when a connection is made."""
+    port = PORTS[edge]
+    rx_pin = port['rx']
+    tx_pin = port['tx']
+    
+    print(f"\n[{edge.upper()}] Starting handshake...")
 
-def button1_released():
-    target = "Tile"+str(tileconnections[0])
-    disconnect_tiles(source=device_id, target=target, edge='top')
-    tileconnections[0] = 0
+    # 1. Open background listening buffer FIRST so we don't miss their transmission
+    try:
+        pi.bb_serial_read_open(rx_pin, BAUD_RATE)
+    except pigpio.error:
+        pi.bb_serial_read_close(rx_pin)
+        pi.bb_serial_read_open(rx_pin, BAUD_RATE)
 
+    # 2. Transmit our Device ID
+    msg = f"{device_id}\n".encode('utf-8')
+    pi.wave_clear()
+    pi.wave_add_serial(tx_pin, BAUD_RATE, msg)
+    wave_id = pi.wave_create()
+    pi.wave_send_once(wave_id)
+    
+    while pi.wave_tx_busy():
+        time.sleep(0.01)
 
-def button2_pressed():
-    print("\nButton clicked! Transmitting message over UART...")
-    uart.write(device_id.encode('utf-8'))
-    if uart.in_waiting > 0:
-        incoming_bytes = uart.read(uart.in_waiting)
-        incoming_string = incoming_bytes.decode('utf-8').strip()       
-        target = incoming_string[4]  # Extract the tile number from the incoming string
-        print(f"Received message: '{incoming_string}' - connecting to {target}")
-        target1 = "Tile"+str(target)
-        connect_tiles(source=device_id, target=target1, edge='right')
-        tileconnections[1] = int(target)
+    # 3. Listen for their Device ID
+    timeout = time.time() + 1.5
+    response = ""
+    while time.time() < timeout:
+        count, data = pi.bb_serial_read(rx_pin)
+        if count > 0:
+            response += data.decode('utf-8', errors='ignore')
+            if '\n' in response:
+                break
+        time.sleep(0.01)
 
-def button2_released():
-    target = "Tile"+str(tileconnections[1])
-    disconnect_tiles(source=device_id, target=target, edge='right')
-    tileconnections[1] = 0
+    # 4. Handle Result
+    if response:
+        target = response.strip()
+        print(f"[{edge.upper()}] SUCCESS: Connected to {target}")
+        port['connected_to'] = target
+        connect_tiles(source=device_id, target=target, edge=edge)
+    else:
+        print(f"[{edge.upper()}] FAILED: Handshake timed out.")
+        pi.bb_serial_read_close(rx_pin)
 
-
-def button3_pressed():
-    print("\nButton clicked! Transmitting message over UART...")
-    uart.write(device_id.encode('utf-8'))
-    if uart.in_waiting > 0:
-        incoming_bytes = uart.read(uart.in_waiting)
-        incoming_string = incoming_bytes.decode('utf-8').strip()       
-        target = incoming_string[4]  # Extract the tile number from the incoming string
-        print(f"Received message: '{incoming_string}' - connecting to {target}")
-        target1 = "Tile"+str(target)
-        connect_tiles(source=device_id, target=target1, edge='bottom')
-        tileconnections[2] = int(target)
-
-def button3_released():
-    target = "Tile"+str(tileconnections[2])
-    disconnect_tiles(source=device_id, target=target, edge='bottom')
-    tileconnections[2] = 0
+    # 5. After handshake, switch to watching for a physical disconnect (FALLING edge)
+    port['cb'] = pi.callback(rx_pin, pigpio.FALLING_EDGE, make_disconnect_callback(edge))
 
 
+def make_connect_callback(edge):
+    """Factory function for RISING edge (Connection) interrupts."""
+    def cb(gpio, level, tick):
+        if level == 1:
+            time.sleep(0.05) # Debounce pogo spring
+            if pi.read(gpio) == 1:
+                # Disable this interrupt so incoming data doesn't trigger it
+                PORTS[edge]['cb'].cancel()
+                execute_handshake(edge)
+    return cb
 
-def button4_pressed():
-    print("\nButton clicked! Transmitting message over UART...")
-    uart.write(device_id.encode('utf-8'))
-    if uart.in_waiting > 0:
-        incoming_bytes = uart.read(uart.in_waiting)
-        incoming_string = incoming_bytes.decode('utf-8').strip()       
-        target = incoming_string[4]  # Extract the tile number from the incoming string
-        print(f"Received message: '{incoming_string}' - connecting to {target}")
-        target1 = "Tile"+str(target)
-        connect_tiles(source=device_id, target=target1, edge='left')
-        tileconnections[3] = int(target)
+def make_disconnect_callback(edge):
+    """Factory function for FALLING edge (Disconnection) interrupts."""
+    def cb(gpio, level, tick):
+        if level == 0:
+            time.sleep(0.05) # Debounce
+            if pi.read(gpio) == 0:
+                print(f"\n[{edge.upper()}] Physical disconnect detected.")
+                port = PORTS[edge]
+                
+                if port['connected_to']:
+                    disconnect_tiles(source=device_id, target=port['connected_to'], edge=edge)
+                    port['connected_to'] = None
+                
+                try:
+                    pi.bb_serial_read_close(gpio)
+                except pigpio.error:
+                    pass
+                
+                # Reset interrupt to watch for a new connection (RISING edge)
+                port['cb'].cancel()
+                port['cb'] = pi.callback(gpio, pigpio.RISING_EDGE, make_connect_callback(edge))
+    return cb
 
-def button4_released():
-    target = "Tile"+str(tileconnections[3])
-    disconnect_tiles(source=device_id, target=target, edge='left')
-    tileconnections[3] = 0
+def setup_pogo_ports():
+    """Initializes all 4 ports to idle state and sets up connect traps."""
+    print("Initializing Pogo Pin Ports...")
+    for edge, config in PORTS.items():
+        # Set RX to pull-down (0V when empty)
+        pi.set_mode(config['rx'], pigpio.INPUT)
+        pi.set_pull_up_down(config['rx'], pigpio.PUD_DOWN)
+        
+        # Set TX to Output and drive HIGH (3.3V)
+        pi.set_mode(config['tx'], pigpio.OUTPUT)
+        pi.write(config['tx'], 1)
+        
+        # Trap the RISING edge (0V -> 3.3V)
+        config['cb'] = pi.callback(config['rx'], pigpio.RISING_EDGE, make_connect_callback(edge))
 
 
 if __name__ == '__main__':
     try:
-        # 4. Connect once at the start of the script
         ensure_connection()
 
-        # # 5. Call functions to send commands over the open connection
-        # print("--- Sending command to switch to node 0 ---")
-        # switch_active_node(node_number=0)
-        # time.sleep(1) # Pauses are for visual pacing, not for technical reasons
-        
-        # print("\n--- Sending command to switch to node 1 ---")
-        # switch_active_node(node_number=1)
-        # time.sleep(1)
-        
-        # print("\n--- Sending command to connect nodes ---")
-        # connect_nodes(source="Tile0_node_0", target="Tile0_node_1")
-        # time.sleep(1)
-        
-        # print("\n--- Sending command to connect tiles ---")
-        # connect_tiles(source="Tile0", target="Tile1")
-        # time.sleep(1)
-
-        # print("\n--- Sending command to disconnect tiles ---")
-        # disconnect_tiles(source="Tile0", target="Tile1")
-        # time.sleep(1)
-
-        # print("\nAll commands sent. Script finished.")
-
-        # Initialize the rotary encoder (assuming GPIO pins 17 and 18)
-        # Note: You'll need to run this on a Raspberry Pi with the gpiozero library installed.
-
-        # Initialize the button (assuming GPIO pin 27)
-        button1 = Button(22, pull_up=True)
-        button2 = Button(26, pull_up=True)
-        button3 = Button(25, pull_up=True)
-        button4 = Button(24, pull_up=True)
+        # Initialize hardware controls
         menubutton = Button(0, pull_up=True)
-        menubutton_was_pressed = False
         clk = Button(17, pull_up=True)
         dt = Button(27, pull_up=True)
-
-        steps = 0
-        current_sequence = []
-
-        # Initialize UART communication
-        # Note: '/dev/serial0' is the default serial port on Raspberry Pi. 
-        # The 2.0s timeout ensures the script doesn't freeze if no response is received.
-        uart = serial.Serial('/dev/serial0', baudrate=9600, timeout=1.0)
-
-        print("\nWaiting for encoder rotation...")
-        
-
 
         clk.when_pressed = check_state
         clk.when_released = check_state
         dt.when_pressed = check_state
         dt.when_released = check_state
-
-
         menubutton.when_pressed = toggle_menu
 
-        button1.when_pressed = button1_pressed
-        button1.when_released = button1_released
-        button2.when_pressed = button2_pressed
-        button2.when_released = button2_released
-        button3.when_pressed = button3_pressed
-        button3.when_released = button3_released
-        button4.when_pressed = button4_pressed
-        button4.when_released = button4_released
+        # Initialize the smart Pogo Pin mesh network
+        setup_pogo_ports()
 
+        print("\nTile is active. Waiting for connections or encoder rotation...")
         pause()
 
-
-    except socketio.exceptions.ConnectionError as e:
-        print(f"Connection failed: {e}")
+    except KeyboardInterrupt:
+        print("\nExiting...")
     except Exception as e:
         print(f"An unexpected error occurred: {e}")
     finally:
-        # 6. Disconnect at the end to allow the script to exit cleanly
+        # Clean up daemons and connections on exit
+        for edge, config in PORTS.items():
+            if config['cb']:
+                config['cb'].cancel()
+            try:
+                pi.bb_serial_read_close(config['rx'])
+            except:
+                pass
+        pi.stop()
         if sio.connected:
             sio.disconnect()
