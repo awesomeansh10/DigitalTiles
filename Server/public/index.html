@@ -328,6 +328,14 @@
     </div>
 
     <div class="viewer-controls">
+        <button class="btn icon-btn" id="btn-group-toggle" title="Toggle Group View">
+            <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+        </button>
         <button class="btn icon-btn" id="btn-layout" title="Shuffle Graph">
             <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="16 3 21 3 21 8"></polyline>
@@ -361,6 +369,7 @@
         let nodesData = {};
         let edgesData = [];
         let isDrawing = false; // Add global drawing state
+        let isGroupedView = false;
 
         function getBorderColor(nodeId) {
             const idLower = nodeId.toLowerCase();
@@ -761,25 +770,70 @@
             const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
             svgEdges.appendChild(defs);
 
-            edgesData.forEach((edge, index) => {
-                const source = nodesData[edge.source];
-                const target = nodesData[edge.target];
+            if (isGroupedView) {
+                const tilePairs = new Set();
+                const tileEdges = [];
+                const tileCenters = {};
+                const tileCounts = {};
+                
+                Object.values(nodesData).forEach(n => {
+                    if (!tileCenters[n.deviceId]) {
+                        tileCenters[n.deviceId] = { x: 0, y: 0, minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+                        tileCounts[n.deviceId] = 0;
+                    }
+                    tileCenters[n.deviceId].x += n.x + 75;
+                    tileCenters[n.deviceId].y += n.y + 75;
+                    tileCenters[n.deviceId].minX = Math.min(tileCenters[n.deviceId].minX, n.x);
+                    tileCenters[n.deviceId].minY = Math.min(tileCenters[n.deviceId].minY, n.y);
+                    tileCenters[n.deviceId].maxX = Math.max(tileCenters[n.deviceId].maxX, n.x + 150);
+                    tileCenters[n.deviceId].maxY = Math.max(tileCenters[n.deviceId].maxY, n.y + 150);
+                    tileCounts[n.deviceId]++;
+                });
 
-                if (source && target) {
-                    const x1 = source.x + 75;
-                    const y1 = source.y + 75;
-                    const x2 = target.x + 75;
-                    const y2 = target.y + 75;
+                Object.keys(tileCenters).forEach(id => {
+                    tileCenters[id].x /= tileCounts[id];
+                    tileCenters[id].y /= tileCounts[id];
+                    
+                    const padding = 30;
+                    const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    rect.setAttribute('x', tileCenters[id].minX - padding);
+                    rect.setAttribute('y', tileCenters[id].minY - padding);
+                    rect.setAttribute('width', tileCenters[id].maxX - tileCenters[id].minX + padding * 2);
+                    rect.setAttribute('height', tileCenters[id].maxY - tileCenters[id].minY + padding * 2);
+                    rect.setAttribute('rx', 24);
+                    rect.setAttribute('fill', getBorderColor(id));
+                    rect.setAttribute('opacity', '0.3');
+                    svgEdges.appendChild(rect);
+                });
+
+                edgesData.forEach(edge => {
+                    const sourceNode = nodesData[edge.source];
+                    const targetNode = nodesData[edge.target];
+                    if (sourceNode && targetNode && sourceNode.deviceId !== targetNode.deviceId) {
+                        const pair = [sourceNode.deviceId, targetNode.deviceId].sort().join('-');
+                        if (!tilePairs.has(pair)) {
+                            tilePairs.add(pair);
+                            tileEdges.push({ source: sourceNode.deviceId, target: targetNode.deviceId });
+                        }
+                    }
+                });
+
+                tileEdges.forEach((edge, index) => {
+                    const sourceId = edge.source;
+                    const targetId = edge.target;
+                    const x1 = tileCenters[sourceId].x;
+                    const y1 = tileCenters[sourceId].y;
+                    const x2 = tileCenters[targetId].x;
+                    const y2 = tileCenters[targetId].y;
 
                     const dx = Math.abs(x2 - x1);
                     const cpOffset = dx * 0.5;
-
                     const cx1 = x1 + (x2 > x1 ? cpOffset : -cpOffset);
                     const cy1 = y1;
                     const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
                     const cy2 = y2;
 
-                    const gradientId = `grad-${index}`;
+                    const gradientId = `grad-group-${index}`;
                     const linearGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
                     linearGradient.setAttribute('id', gradientId);
                     linearGradient.setAttribute('x1', x1);
@@ -790,11 +844,11 @@
 
                     const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
                     stop1.setAttribute('offset', '0%');
-                    stop1.setAttribute('stop-color', getBorderColor(source.id));
+                    stop1.setAttribute('stop-color', getBorderColor(sourceId));
                     
                     const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
                     stop2.setAttribute('offset', '100%');
-                    stop2.setAttribute('stop-color', getBorderColor(target.id));
+                    stop2.setAttribute('stop-color', getBorderColor(targetId));
 
                     linearGradient.appendChild(stop1);
                     linearGradient.appendChild(stop2);
@@ -805,14 +859,71 @@
 
                     path.setAttribute('d', pathString);
                     path.setAttribute('class', 'connection-line');
+                    path.setAttribute('stroke-width', '10');
                     path.setAttribute('stroke', `url(#${gradientId})`);
 
                     svgEdges.appendChild(path);
-                }
-            });
+                });
+            } else {
+                edgesData.forEach((edge, index) => {
+                    const source = nodesData[edge.source];
+                    const target = nodesData[edge.target];
+
+                    if (source && target) {
+                        const x1 = source.x + 75;
+                        const y1 = source.y + 75;
+                        const x2 = target.x + 75;
+                        const y2 = target.y + 75;
+
+                        const dx = Math.abs(x2 - x1);
+                        const cpOffset = dx * 0.5;
+
+                        const cx1 = x1 + (x2 > x1 ? cpOffset : -cpOffset);
+                        const cy1 = y1;
+                        const cx2 = x2 - (x2 > x1 ? cpOffset : -cpOffset);
+                        const cy2 = y2;
+
+                        const gradientId = `grad-${index}`;
+                        const linearGradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                        linearGradient.setAttribute('id', gradientId);
+                        linearGradient.setAttribute('x1', x1);
+                        linearGradient.setAttribute('y1', y1);
+                        linearGradient.setAttribute('x2', x2);
+                        linearGradient.setAttribute('y2', y2);
+                        linearGradient.setAttribute('gradientUnits', 'userSpaceOnUse');
+
+                        const stop1 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                        stop1.setAttribute('offset', '0%');
+                        stop1.setAttribute('stop-color', getBorderColor(source.id));
+                        
+                        const stop2 = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                        stop2.setAttribute('offset', '100%');
+                        stop2.setAttribute('stop-color', getBorderColor(target.id));
+
+                        linearGradient.appendChild(stop1);
+                        linearGradient.appendChild(stop2);
+                        defs.appendChild(linearGradient);
+
+                        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        const pathString = `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`;
+
+                        path.setAttribute('d', pathString);
+                        path.setAttribute('class', 'connection-line');
+                        path.setAttribute('stroke', `url(#${gradientId})`);
+
+                        svgEdges.appendChild(path);
+                    }
+                });
+            }
         }
 
         let isAnimating = false;
+
+        document.getElementById('btn-group-toggle').addEventListener('click', (e) => {
+            isGroupedView = !isGroupedView;
+            e.currentTarget.classList.toggle('btn-secondary', isGroupedView);
+            drawEdges();
+        });
 
         document.getElementById('btn-layout').addEventListener('click', () => {
             if (isAnimating) return;
@@ -887,6 +998,24 @@
                         forces[e.target].y -= (dy / dist) * force;
                     }
                 });
+
+                if (isGroupedView) {
+                    for (let a = 0; a < nodes.length; a++) {
+                        for (let b = a + 1; b < nodes.length; b++) {
+                            if (nodes[a].deviceId === nodes[b].deviceId) {
+                                let dx = targetPos[nodes[b].id].x - targetPos[nodes[a].id].x;
+                                let dy = targetPos[nodes[b].id].y - targetPos[nodes[a].id].y;
+                                let dist = Math.sqrt(dx * dx + dy * dy) || 0.1;
+                                let force = (dist - 170) * 0.05;
+
+                                forces[nodes[a].id].x += (dx / dist) * force;
+                                forces[nodes[a].id].y += (dy / dist) * force;
+                                forces[nodes[b].id].x -= (dx / dist) * force;
+                                forces[nodes[b].id].y -= (dy / dist) * force;
+                            }
+                        }
+                    }
+                }
 
                 // Reduced the centering gravity from 0.05 to 0.015 so they don't clump back to the middle
                 nodes.forEach(n => {
