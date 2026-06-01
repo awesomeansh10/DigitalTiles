@@ -425,6 +425,7 @@
         socket.on('node_updated', (data) => {
             const foundIndex = myNodes.findIndex(n => n.id === data.id);
             if (foundIndex !== -1) {
+                const imageChanged = myNodes[foundIndex].image !== data.image;
                 myNodes[foundIndex].image = data.image;
                 if (data.bgColor) myNodes[foundIndex].bgColor = data.bgColor;
                 if (data.hasOwnProperty('onlineEdited')) {
@@ -457,11 +458,19 @@
                         }
                     }
 
-                    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
-                    if (data.image && data.image !== 'data:,') {
-                        const img = new Image();
-                        img.onload = () => ctx.drawImage(img, 0, 0);
-                        img.src = data.image;
+                    if (imageChanged) {
+                        if (data.image && data.image !== 'data:,') {
+                            const img = new Image();
+                            img.onload = () => {
+                                if (currentNodeIndex === foundIndex && !isDrawing) {
+                                    ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                                    ctx.drawImage(img, 0, 0);
+                                }
+                            };
+                            img.src = data.image;
+                        } else {
+                            ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                        }
                     }
                 }
             }
