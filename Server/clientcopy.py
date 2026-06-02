@@ -60,15 +60,14 @@ def connect_tiles(source, target):
         'target': target
     })
 
-def disconnect_tiles(source, target):
-    """
-    Sends a command to disconnect all nodes on a source tile from all nodes on a target tile.
-    """
+def disconnect_tiles(source, target, edge):
     ensure_connection()
-    print(f"Sending command to disconnect all nodes on tile '{source}' from tile '{target}'")
-    sio.emit('disconnect_tiles', {
-        'source': source,
-        'target': target
+    print(f"Disconnecting tile '{source}' from tile '{target}' on the {edge} edge")
+    sio.emit('disconnect_tiles', {'source': source, 'target': target})
+    sio.emit('python_update', {
+        'action': 'tile_disconnected',
+        'deviceId': source,
+        'edge': edge
     })
 
 def toggle_menu():
@@ -106,7 +105,7 @@ if __name__ == '__main__':
         # time.sleep(1)
 
         # print("\n--- Sending command to disconnect tiles ---")
-        # disconnect_tiles(source="Tile0", target="Tile1")
+        # disconnect_tiles(source="Tile0", target="Tile1", edge="right")
         # time.sleep(1)
 
         # print("\nAll commands sent. Script finished.")
