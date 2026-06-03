@@ -444,10 +444,6 @@
                     if (eraserSquare) {
                         eraserSquare.style.backgroundColor = currentBgColor;
                     }
-                    if (isEraser) {
-                        currentColor = currentBgColor;
-                        ctx.strokeStyle = currentColor;
-                    }
                     
                     const indicator = document.getElementById('edit-indicator');
                     if (indicator) {
@@ -464,6 +460,7 @@
                             img.onload = () => {
                                 if (currentNodeIndex === foundIndex && !isDrawing) {
                                     ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+                                    ctx.globalCompositeOperation = 'source-over';
                                     ctx.drawImage(img, 0, 0);
                                 }
                             };
@@ -482,14 +479,12 @@
             if (data.action === 'change_color' && data.color) {
                 if (data.color === 'eraser' || data.color === '#ffffff') {
                     isEraser = true;
-                    currentColor = currentBgColor;
-                    ctx.lineWidth = 65;
+                    ctx.lineWidth = 100;
                 } else {
                     isEraser = false;
                     currentColor = data.color;
                     ctx.lineWidth = 4;
                 }
-                ctx.strokeStyle = currentColor;
             } else if (data.action === 'switch_node' && data.deviceId === DEVICE_ID) {
                 const targetNodeId = DEVICE_ID + '_node_' + data.nodeNumber;
                 
@@ -516,9 +511,6 @@
                             if (eraserSquare) {
                                 eraserSquare.style.backgroundColor = currentBgColor;
                             }
-                            if (isEraser) {
-                                currentColor = currentBgColor;
-                            }
                             
                             const indicator = document.getElementById('edit-indicator');
                             if (indicator) {
@@ -534,14 +526,16 @@
                             ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
                             if (activeNode.image && activeNode.image !== 'data:,') {
                                 const img = new Image();
-                                img.onload = () => ctx.drawImage(img, 0, 0);
+                                img.onload = () => {
+                                    ctx.globalCompositeOperation = 'source-over';
+                                    ctx.drawImage(img, 0, 0);
+                                };
                                 img.src = activeNode.image;
                             }
 
-                            ctx.strokeStyle = currentColor;
                             ctx.lineCap = 'round';
                             ctx.lineJoin = 'round';
-                            ctx.lineWidth = isEraser ? 65 : 4;
+                            ctx.lineWidth = isEraser ? 100 : 4;
                         }
                     } else {
                         // Create new node if it does not exist
@@ -657,9 +651,6 @@
                 if (eraserSquare) {
                     eraserSquare.style.backgroundColor = currentBgColor;
                 }
-                if (isEraser) {
-                    currentColor = currentBgColor;
-                }
                 
                 const indicator = document.getElementById('edit-indicator');
                 if (indicator) {
@@ -675,14 +666,16 @@
                 ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
                 if (activeNode.image && activeNode.image !== 'data:,') {
                     const img = new Image();
-                    img.onload = () => ctx.drawImage(img, 0, 0);
+                    img.onload = () => {
+                        ctx.globalCompositeOperation = 'source-over';
+                        ctx.drawImage(img, 0, 0);
+                    };
                     img.src = activeNode.image;
                 }
                 
-                ctx.strokeStyle = currentColor;
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                ctx.lineWidth = isEraser ? 65 : 4;
+                ctx.lineWidth = isEraser ? 100 : 4;
             }, 15);
         }
 
@@ -693,12 +686,14 @@
 
             ctx.lineCap = 'round';
             ctx.lineJoin = 'round';
-            ctx.lineWidth = isEraser ? 65 : 4;
-            ctx.strokeStyle = currentColor;
+            ctx.lineWidth = isEraser ? 100 : 4;
 
             if (currentImg !== 'data:,') {
                 const img = new Image();
-                img.onload = () => ctx.drawImage(img, 0, 0);
+                img.onload = () => {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.drawImage(img, 0, 0);
+                };
                 img.src = currentImg;
             }
         }
@@ -732,10 +727,6 @@
                     eraserSquare.style.backgroundColor = selectedBg;
                 }
                 
-                if (isEraser) {
-                    currentColor = currentBgColor;
-                    ctx.strokeStyle = currentColor;
-                }
 
                 if (currentNodeIndex >= 0) {
                     myNodes[currentNodeIndex].bgColor = currentBgColor;
@@ -754,14 +745,12 @@
                 const selectedColor = e.target.getAttribute('data-color');
                 if (selectedColor === 'eraser') {
                     isEraser = true;
-                    currentColor = currentBgColor;
-                    ctx.lineWidth = 65;
+                    ctx.lineWidth = 100;
                 } else {
                     isEraser = false;
                     currentColor = selectedColor;
                     ctx.lineWidth = 4;
                 }
-                ctx.strokeStyle = currentColor; // Change brush color
             });
         });
 
@@ -780,6 +769,8 @@
         }
 function drawLoop() {
     if (needsDraw) {
+        ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+        ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : currentColor;
         ctx.beginPath();
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(currentX, currentY);
@@ -804,6 +795,8 @@ function handleStart(e) {
     isDrawing = true;
     needsDraw = true;
     
+    ctx.globalCompositeOperation = isEraser ? 'destination-out' : 'source-over';
+    ctx.strokeStyle = isEraser ? 'rgba(0,0,0,1)' : currentColor;
     ctx.beginPath();
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';

@@ -435,6 +435,7 @@
                     fsCanvas.width = updatedImg.width;
                     fsCanvas.height = updatedImg.height;
                     const ctx = fsCanvas.getContext('2d');
+                    ctx.globalCompositeOperation = 'source-over';
                     ctx.drawImage(updatedImg, 0, 0);
                 };
                 updatedImg.src = data.image;
@@ -600,7 +601,6 @@
                 const selectedColor = e.target.getAttribute('data-color');
                 if (selectedColor === 'eraser') {
                     fsIsEraser = true;
-                    fsCurrentColor = fsCurrentBgColor;
                 } else {
                     fsIsEraser = false;
                     fsCurrentColor = selectedColor;
@@ -619,9 +619,6 @@
                     eraserSquare.style.backgroundColor = selectedBg;
                 }
                 
-                if (fsIsEraser) {
-                    fsCurrentColor = fsCurrentBgColor;
-                }
 
                 if (activeFullscreenNode) {
                     nodesData[activeFullscreenNode].bgColor = selectedBg;
@@ -654,14 +651,12 @@
                 eraserSquare.style.backgroundColor = fsCurrentBgColor;
             }
 
-            if (fsIsEraser) {
-                fsCurrentColor = fsCurrentBgColor;
-            }
             
             const img = new Image();
             img.onload = () => {
                 fsCanvas.width = img.width;
                 fsCanvas.height = img.height;
+                fsCtx.globalCompositeOperation = 'source-over';
                 fsCtx.drawImage(img, 0, 0);
                 
                 overlay.style.display = 'flex';
@@ -696,11 +691,12 @@
             lastY = coords.y;
             isDrawing = true;
 
+            fsCtx.globalCompositeOperation = fsIsEraser ? 'destination-out' : 'source-over';
             fsCtx.beginPath();
             fsCtx.lineCap = 'round';
             fsCtx.lineJoin = 'round';
-            fsCtx.lineWidth = fsIsEraser ? 65 : 4;
-            fsCtx.strokeStyle = fsCurrentColor; // Set dynamic stroke color
+            fsCtx.lineWidth = fsIsEraser ? 100 : 4;
+            fsCtx.strokeStyle = fsIsEraser ? 'rgba(0,0,0,1)' : fsCurrentColor;
             fsCtx.moveTo(lastX, lastY);
             fsCtx.lineTo(lastX, lastY);
             fsCtx.stroke();
