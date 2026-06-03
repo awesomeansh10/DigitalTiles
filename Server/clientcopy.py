@@ -4,7 +4,7 @@ import time
 # Load environment variables from .env file
 
 # --- Global Configuration ---
-server_url='http://tiles.anshagarwal.net:1234'
+server_url='http://127.0.0.1:1234'
 device_id = "Tile1"
 connected_tiles = [0,0,0,0]
 # 1. Create a single, persistent client instance
@@ -49,15 +49,15 @@ def connect_nodes(source, target):
         'target': target
     })
 
-def connect_tiles(source, target):
-    """
-    Sends a command to connect all nodes on a source tile to all nodes on a target tile.
-    """
+def connect_tiles(source, target, edge):
     ensure_connection()
-    print(f"Sending command to connect all nodes on tile '{source}' to tile '{target}'")
-    sio.emit('connect_tiles', {
-        'source': source,
-        'target': target
+    print(f"Connecting tile '{source}' to tile '{target}' on the {edge} edge")
+    sio.emit('connect_tiles', {'source': source, 'target': target})
+    sio.emit('python_update', {
+        'action': 'tile_connected',
+        'deviceId': source,
+        'targetTile': target,
+        'edge': edge
     })
 
 def disconnect_tiles(source, target, edge):
