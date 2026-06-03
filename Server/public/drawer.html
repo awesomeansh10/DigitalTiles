@@ -240,7 +240,7 @@
             pointer-events: none;
             opacity: 0;
             transition: opacity 0.3s ease;
-            box-shadow: 0 0 60px 25px var(--edge-color, white);
+            box-shadow: 0 0 100px 40px var(--edge-color, white);
             background-color: var(--edge-color, white);
         }
 
@@ -359,8 +359,8 @@
             if (!tileId) return '#ffffff';
             const idLower = tileId.toLowerCase();
             if (idLower.startsWith('tile1')) return 'lightgreen';
-            if (idLower.startsWith('tile2')) return 'lightblue';
-            if (idLower.startsWith('tile3')) return 'lightyellow';
+            if (idLower.startsWith('tile2')) return 'lightyellow';
+            if (idLower.startsWith('tile3')) return 'lightblue';
             return '#ffffff';
         }
 
