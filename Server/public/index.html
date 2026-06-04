@@ -461,6 +461,11 @@
             drawEdges();
         });
 
+        socket.on('edge_removed', (edge) => {
+            edgesData = edgesData.filter(e => !(e.source === edge.source && e.target === edge.target));
+            drawEdges();
+        });
+
         function resolveCollisions(activeId) {
             const nodes = Object.values(nodesData);
             const MIN_DIST = 220; // Increased from 170 to keep tiles further apart
@@ -814,13 +819,45 @@
                     }
                 });
 
+                function getIntersection(c1, c2, minX, minY, maxX, maxY) {
+                    const dx = c2.x - c1.x;
+                    const dy = c2.y - c1.y;
+                    if (dx === 0 && dy === 0) return {x: c1.x, y: c1.y};
+                    let tMin = Infinity;
+                    let hit = {x: c1.x, y: c1.y};
+                    if (dx < 0) {
+                        let t = (minX - c1.x) / dx;
+                        if (t > 0 && t < tMin) { tMin = t; hit = {x: minX, y: c1.y + t * dy}; }
+                    }
+                    if (dx > 0) {
+                        let t = (maxX - c1.x) / dx;
+                        if (t > 0 && t < tMin) { tMin = t; hit = {x: maxX, y: c1.y + t * dy}; }
+                    }
+                    if (dy < 0) {
+                        let t = (minY - c1.y) / dy;
+                        if (t > 0 && t < tMin) { tMin = t; hit = {x: c1.x + t * dx, y: minY}; }
+                    }
+                    if (dy > 0) {
+                        let t = (maxY - c1.y) / dy;
+                        if (t > 0 && t < tMin) { tMin = t; hit = {x: c1.x + t * dx, y: maxY}; }
+                    }
+                    return hit;
+                }
+
                 tileEdges.forEach((edge, index) => {
                     const sourceId = edge.source;
                     const targetId = edge.target;
-                    const x1 = tileCenters[sourceId].x;
-                    const y1 = tileCenters[sourceId].y;
-                    const x2 = tileCenters[targetId].x;
-                    const y2 = tileCenters[targetId].y;
+                    const c1 = tileCenters[sourceId];
+                    const c2 = tileCenters[targetId];
+                    const padding = 30;
+
+                    const p1 = getIntersection(c1, c2, c1.minX - padding, c1.minY - padding, c1.maxX + padding, c1.maxY + padding);
+                    const p2 = getIntersection(c2, c1, c2.minX - padding, c2.minY - padding, c2.maxX + padding, c2.maxY + padding);
+
+                    const x1 = p1.x;
+                    const y1 = p1.y;
+                    const x2 = p2.x;
+                    const y2 = p2.y;
 
                     const dx = Math.abs(x2 - x1);
                     const cpOffset = dx * 0.5;
@@ -919,6 +956,7 @@
             isGroupedView = !isGroupedView;
             e.currentTarget.classList.toggle('btn-secondary', isGroupedView);
             drawEdges();
+            document.getElementById('btn-layout').click();
         });
 
         document.getElementById('btn-layout').addEventListener('click', () => {
