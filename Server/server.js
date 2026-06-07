@@ -143,6 +143,14 @@ io.on('connection', (socket) => {
         io.emit('toggle_menu', data);
     });
 
+    // 8. Clear all nodes
+    socket.on('clear_all', () => {
+        graphState.nodes = {};
+        graphState.edges = [];
+        // Note: Not clearing tileConnections so the physical mesh mappings remain intact!
+        io.emit('graph_cleared');
+    });
+
     socket.on('python_update', (data) => {
         socket.broadcast.emit('python_update', data);
     });

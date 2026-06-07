@@ -29,7 +29,7 @@ BAUD_RATE = 9600
 PORTS = {
     'left':    {'tx': 20,  'rx': 21,  'connected_to': None, 'cb': None},
     'bottom':  {'tx': 12, 'rx': 7, 'connected_to': None, 'cb': None},
-    'right': {'tx': 25, 'rx': 8, 'connected_to': None, 'cb': None},
+    'right': {'tx': 8, 'rx': 25, 'connected_to': None, 'cb': None},
     'top':   {'tx': 24, 'rx': 23, 'connected_to': None, 'cb': None}
 }
 
@@ -47,6 +47,13 @@ def connect():
 @sio.event
 def disconnect():
     print("Disconnected from the server.")
+
+@sio.event
+def graph_cleared():
+    global steps, current_sequence
+    print("Graph cleared. Resetting encoder steps to 0.")
+    steps = 0
+    current_sequence.clear()
 
 def ensure_connection():
     if not sio.connected:

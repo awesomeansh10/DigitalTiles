@@ -473,6 +473,22 @@
             }
         });
 
+    socket.on('graph_cleared', () => {
+        if (switchTimeout) clearTimeout(switchTimeout);
+        if (updateTimeout) clearTimeout(updateTimeout);
+        if (bgUpdateTimeout) clearTimeout(bgUpdateTimeout);
+        
+        myNodes = [];
+        currentNodeIndex = -1;
+        nodeCounter = 1;
+        
+        ctx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+        const indicator = document.getElementById('edit-indicator');
+        if (indicator) indicator.classList.remove('show');
+        
+        createNewNode();
+    });
+
         // Listen for custom events broadcasted from the Python script
         socket.on('python_update', (data) => {
             console.log("Received command from Python:", data);

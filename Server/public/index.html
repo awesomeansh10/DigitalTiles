@@ -345,6 +345,12 @@
                 <line x1="4" y1="4" x2="9" y2="9"></line>
             </svg>
         </button>
+        <button class="btn icon-btn" id="btn-clear-all" title="Clear All" style="background-color: #ef4444;">
+            <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+        </button>
         <div class="save-dropdown-container">
             <button class="btn icon-btn btn-secondary" id="btn-save-menu" title="Export">
                 <svg viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
@@ -463,6 +469,16 @@
 
         socket.on('edge_removed', (edge) => {
             edgesData = edgesData.filter(e => !(e.source === edge.source && e.target === edge.target));
+            drawEdges();
+        });
+
+        socket.on('graph_cleared', () => {
+            Object.keys(nodesData).forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.remove();
+            });
+            nodesData = {};
+            edgesData = [];
             drawEdges();
         });
 
@@ -957,6 +973,12 @@
             e.currentTarget.classList.toggle('btn-secondary', isGroupedView);
             drawEdges();
             document.getElementById('btn-layout').click();
+        });
+
+        document.getElementById('btn-clear-all').addEventListener('click', () => {
+            if (confirm("Are you sure you want to delete all nodes and reset the tiles?")) {
+                socket.emit('clear_all');
+            }
         });
 
         document.getElementById('btn-layout').addEventListener('click', () => {
