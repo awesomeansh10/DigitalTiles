@@ -29,8 +29,8 @@ BAUD_RATE = 9600
 PORTS = {
     'left':    {'tx': 20,  'rx': 21,  'connected_to': None, 'cb': None},
     'bottom':  {'tx': 12, 'rx': 7, 'connected_to': None, 'cb': None},
-    'right': {'tx': 8, 'rx': 25, 'connected_to': None, 'cb': None},
-    'top':   {'tx': 24, 'rx': 23, 'connected_to': None, 'cb': None}
+    'top': {'tx': 8, 'rx': 25, 'connected_to': None, 'cb': None},
+    'right':   {'tx': 24, 'rx': 23, 'connected_to': None, 'cb': None}
 }
 
 # Connect to the local pigpio daemon
