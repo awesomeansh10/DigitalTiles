@@ -110,10 +110,12 @@ def check_state():
             else:
                 steps -= 1
             
-            activenode = abs(steps) if steps <= 0 else steps
-            if activenode == 0: activenode = 1
-            
-            switch_active_node(node_number=activenode)
+            # Only change the active node when the encoder has moved 2 steps
+            if steps % 2 == 0:
+                logical_steps = steps // 2
+                activenode = abs(logical_steps) + 1
+                
+                switch_active_node(node_number=activenode)
 
         current_sequence.clear()
     elif not current_sequence or current_sequence[-1] != state:
